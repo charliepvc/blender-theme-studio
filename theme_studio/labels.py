@@ -1,4 +1,4 @@
-"""Italian labels for editable Blender theme fields."""
+"""English source labels and Italian translations for editable theme fields."""
 
 FIELD_LABELS = {
     "Active": "Attivo",
@@ -312,4 +312,5 @@ FIELD_LABELS = {
 
 
 def field_label(label):
-    return FIELD_LABELS.get(label, label)
+    from .translations import iface
+    return iface(label)

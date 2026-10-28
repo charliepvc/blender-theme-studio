@@ -9,8 +9,8 @@ bl_info = {
     "author": "Theme Studio",
     "version": (0, 4, 0),
     "blender": (5, 2, 1),
-    "location": "Vista 3D > Barra laterale > Theme Studio",
-    "description": "Personalizza i colori di Blender con modifiche collegate e reversibili",
+    "location": "3D View > Sidebar > Theme Studio",
+    "description": "Customize Blender colors with linked, reversible edits",
     "category": "Interface",
     "doc_url": "https://github.com/charliepvc/blender-theme-studio",
     "tracker_url": "https://github.com/charliepvc/blender-theme-studio/issues",
@@ -18,8 +18,15 @@ bl_info = {
 
 
 def register():
-    import_module(f"{__name__}.ui").register()
+    translations = import_module(f"{__name__}.translations")
+    translations.register()
+    try:
+        import_module(f"{__name__}.ui").register()
+    except Exception:
+        translations.unregister()
+        raise
 
 
 def unregister():
     import_module(f"{__name__}.ui").unregister()
+    import_module(f"{__name__}.translations").unregister()

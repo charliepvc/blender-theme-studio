@@ -19,7 +19,7 @@ Theme Studio edits Blender’s global theme live, with reversible sessions and c
 
 ## Screenshots
 
-Real captures from an editing session. The add-on interface is currently in Italian; colors shown are examples, not a bundled preset.
+Real captures from an editing session with the Italian interface. The add-on defaults to English and also supports Italian; colors shown are examples, not a bundled preset.
 
 **Theme controls**
 
@@ -42,15 +42,15 @@ Real captures from an editing session. The add-on interface is currently in Ital
 1. Download `theme_studio-0.4.0.zip` from [Releases](https://github.com/charliepvc/blender-theme-studio/releases) when available. Use the add-on ZIP, not GitHub’s source archive.
 2. In Blender, open `Edit > Preferences > Add-ons` and install from disk.
 3. Select the ZIP and enable **Theme Studio**.
-4. Open the 3D View sidebar with **N**, choose **Theme Studio**, then **Inizia a modificare** (Start editing).
+4. Open the 3D View sidebar with **N**, choose **Theme Studio**, then **Start editing**.
 
-The add-on currently appears only in the 3D View sidebar. Its tabs are **Tema** (Theme), **Vista 3D** (3D View), and **Dettagli** (Details). The add-on interface and [user guide](docs/user/README.md) are currently in Italian.
+The add-on currently appears only in the 3D View sidebar. Its tabs are **Theme**, **3D View**, and **Details**. English is the default interface language. Italian is supplied through Blender's native translations: choose Italian and enable **Interface** translation in Blender's preferences. Tooltips follow Blender's separate tooltip translation setting. Other languages use the English source text for Theme Studio's own messages. The [user guide](docs/user/README.md) is currently in Italian.
 
 ## Use safely
 
-Theme changes are global and visible across Blender editors. Hiding the N-panel does not end an editing session. Choose **Scarta modifiche…** (Discard changes…) to restore session-owned fields while preserving detected external changes, or **Termina…** (Finish…) to choose how to end the session.
+Theme changes are global and visible across Blender editors. Hiding the N-panel does not end an editing session. Choose **Discard changes…** to restore session-owned fields while preserving detected external changes, or **Finish…** to choose how to end the session.
 
-Theme Studio does not automatically save preferences. **Salva tutte le preferenze…** (Save all preferences…) writes all Blender preferences, not only the theme. Avoid Blender’s manual preference save during a temporary preview. After keeping a theme without saving immediately, Blender’s own auto-save may save it later. Recovery data can help after an interruption, but recovery is not guaranteed; keep a copy of important themes.
+Theme Studio does not automatically save preferences. **Save all preferences…** writes all Blender preferences, not only the theme. Avoid Blender's manual preference save during a temporary preview. After keeping a theme without saving immediately, Blender's own auto-save may save it later. Recovery data can help after an interruption, but recovery is not guaranteed; keep a copy of important themes.
 
 ## Feedback and issues
 
@@ -65,7 +65,7 @@ python -c "from pathlib import Path; Path('dist').mkdir(exist_ok=True)"
 python tools/build_dev_addon.py --output dist/theme_studio-0.4.0.zip
 ```
 
-The builder uses Python’s standard library and includes only required add-on files. It refuses to overwrite an existing ZIP; choose a new filename for another build. This is a local legacy add-on ZIP, not a Blender Extension. The 0.4.0 ZIP is a local candidate, not a published release.
+The builder uses Python’s standard library and includes only required add-on files. It refuses to overwrite an existing ZIP; choose a new filename for another build. This is a legacy add-on ZIP for local installation, not a Blender Extension. Version 0.4.0 is an early preview; see [Releases](https://github.com/charliepvc/blender-theme-studio/releases) for available downloads and known limitations.
 
 ## Links
 

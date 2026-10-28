@@ -5,17 +5,17 @@ from colorsys import rgb_to_hsv, hsv_to_rgb
 
 _PREFIX = "preferences.themes[0]."
 _MAIN_GROUPS = (
-    ("backgrounds", "Fondi", "Fondi canvas degli editor", "surfaces.canvas", ()),
-    ("panels", "Pannelli", "Pannelli, sidebar, asset shelf e header", None,
+    ("backgrounds", "Backgrounds", "Editor canvas backgrounds", "surfaces.canvas", ()),
+    ("panels", "Panels", "Panels, sidebars, asset shelf and headers", None,
      ("surfaces.panels", "surfaces.sidebars", "surfaces.asset_shelf", "surfaces.headers")),
-    ("text", "Testi", "Testi di controlli ed editor", None,
+    ("text", "Text", "Control and editor text", None,
      ("text.controls", "text.editor", "text.panels", "text.titles", "text.headers", "text.header_highlights")),
-    ("controls", "Controlli", "Superfici e indicatori dei controlli", None,
+    ("controls", "Controls", "Control surfaces and indicators", None,
      ("surfaces.controls", "symbols.control_indicators")),
-    ("borders", "Bordi", "Bordi e contorni dell'interfaccia", None, ("borders.controls",)),
-    ("selection", "Selezione", "Elementi selezionati fuori dalla Vista 3D", None,
+    ("borders", "Borders", "Interface borders and outlines", None, ("borders.controls",)),
+    ("selection", "Selection", "Selected items outside the 3D View", None,
      ("states.control_selection",)),
-    ("active", "Attivi", "Indicatori attivi generali", None, ()),
+    ("active", "Active", "General active indicators", None, ()),
 )
 _SELECTION_PATHS = (
     "outliner.selected_highlight", "outliner.selected_object", "node_editor.node_selected",
@@ -28,20 +28,20 @@ _ACTIVE_PATHS = (
     "outliner.active_object", "node_editor.node_active", "sequence_editor.active_strip",
 )
 _VIEWPORT_GROUPS = (
-    ("background", "Sfondo", ("surfaces.viewport_gradient", "surfaces.viewport_masks")),
-    ("headers", "Header e testi", ("surfaces.headers", "text.editor", "text.titles",
+    ("background", "Background", ("surfaces.viewport_gradient", "surfaces.viewport_masks")),
+    ("headers", "Headers and text", ("surfaces.headers", "text.editor", "text.titles",
                                     "text.headers", "text.header_highlights")),
-    ("selection", "Selezione e modalità", ("states.object_selection", "states.mesh_selection",
+    ("selection", "Selection and modes", ("states.object_selection", "states.mesh_selection",
                                               "symbols.face_orientation", "symbols.mesh_attributes")),
-    ("guides", "Griglie e guide", ("guides.viewport_grid", "guides.viewport_clipping",
+    ("guides", "Guides and grids", ("guides.viewport_grid", "guides.viewport_clipping",
                                     "guides.mesh_topology", "guides.mesh_markers")),
 )
 
 
 _DETAIL_LABELS = {
-    "surfaces": "Superfici", "text": "Testi", "states": "Stati", "symbols": "Simboli",
-    "guides": "Guide e griglie", "geometry": "Forme", "connections": "Collegamenti",
-    "typography": "Caratteri", "borders": "Bordi",
+    "surfaces": "Surfaces", "text": "Text", "states": "States", "symbols": "Symbols",
+    "guides": "Guides", "geometry": "Geometry", "connections": "Connections",
+    "typography": "Typography", "borders": "Borders",
 }
 
 

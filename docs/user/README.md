@@ -4,6 +4,11 @@ Theme Studio modifica il tema globale di Blender. L'interfaccia attuale si trova
 nella Vista 3D, barra laterale **N > Theme Studio**. La scelta alternativa nella
 sezione Themes delle Preferenze è una funzione pianificata, non ancora presente.
 
+La lingua predefinita dell'addon è l'inglese. Per usare la traduzione italiana,
+scegliere l'italiano e attivare la traduzione dell'interfaccia nelle preferenze
+di Blender; i tooltip seguono la relativa impostazione separata. Non serve uno
+ZIP diverso. Questa guida riporta i nomi inglesi e i corrispondenti italiani.
+
 ## Installazione
 
 Installare lo ZIP dell'addon dalla funzione di installazione da disco nelle
@@ -13,8 +18,8 @@ sorgenti generato da GitHub. Per costruire il pacchetto dai sorgenti seguire il
 
 ## Modificare il tema
 
-1. Premere **Inizia a modificare**: viene preparata la copia iniziale.
-2. Usare **Tema** per i gruppi comuni, **Vista 3D** per il viewport e **Dettagli**
+1. Premere **Start editing** (**Inizia a modificare**): viene preparata la copia iniziale.
+2. Usare **Theme** (**Tema**) per i gruppi comuni, **3D View** (**Vista 3D**) per il viewport e **Details** (**Dettagli**)
    per i campi individuali filtrati per categoria e contesto.
 3. Le modifiche vengono applicate live. I colori RGBA espongono anche l'alpha;
    i colori RGB non hanno una trasparenza modificabile.
@@ -27,12 +32,12 @@ Non modificare l'identità del profilo per forzare il caricamento su altre build
 
 ## Concludere una sessione
 
-- **Scarta modifiche…** ripristina i campi ancora posseduti dalla sessione e
+- **Discard changes…** (**Scarta modifiche…**) ripristina i campi ancora posseduti dalla sessione e
   conserva, segnalando i conflitti, le modifiche esterne rilevate.
-- **Termina… > Usa senza salvare ora** mantiene il tema live e chiude la
+- **Finish… > Use without saving now** (**Termina… > Usa senza salvare ora**) mantiene il tema live e chiude la
   sessione senza salvare subito le preferenze. L'auto-save di Blender, se attivo,
   può salvarle successivamente.
-- **Salva tutte le preferenze…** salva l'intero insieme delle preferenze di
+- **Save all preferences…** (**Salva tutte le preferenze…**) salva l'intero insieme delle preferenze di
   Blender, non soltanto il tema. Richiede una scelta esplicita.
 
 Nascondere il pannello N non conclude la sessione. Prima di chiudere Blender,
@@ -49,7 +54,7 @@ pendenti. Dopo un aggiornamento di Blender possono invece restare dati di una
 sessione non conclusa appartenenti a una build precedente: non vengono applicati
 automaticamente alla build nuova.
 
-**Conserva i dati e continua…** permette di mantenere il tema attuale senza
+**Keep data and continue…** (**Conserva i dati e continua…**) permette di mantenere il tema attuale senza
 ripristinare quello precedente. Dopo la conferma viene conservata una copia
 verificata dei dati di recupero; gli originali non vengono spostati o cancellati.
 L'addon ricorda la scelta soltanto per quei contenuti esatti. Se l'originale

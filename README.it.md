@@ -19,7 +19,7 @@ Theme Studio modifica live il tema globale di Blender, con sessioni reversibili 
 
 ## Screenshot
 
-Catture reali di una sessione di modifica. L'interfaccia dell'addon è attualmente in italiano; i colori mostrati sono esempi, non un preset incluso.
+Catture reali di una sessione di modifica con l'interfaccia italiana. L'addon usa l'inglese come lingua predefinita e supporta anche l'italiano; i colori mostrati sono esempi, non un preset incluso.
 
 **Controlli del tema**
 
@@ -42,15 +42,15 @@ Catture reali di una sessione di modifica. L'interfaccia dell'addon è attualmen
 1. Quando disponibile, scarica `theme_studio-0.4.0.zip` dalla sezione [Releases](https://github.com/charliepvc/blender-theme-studio/releases). Usa lo ZIP dell’addon, non l’archivio dei sorgenti GitHub.
 2. In Blender, apri `Edit > Preferences > Add-ons` e installa da disco.
 3. Seleziona lo ZIP e attiva **Theme Studio**.
-4. Apri la barra laterale della Vista 3D con **N**, scegli **Theme Studio**, poi **Inizia a modificare**.
+4. Apri la barra laterale della Vista 3D con **N**, scegli **Theme Studio**, poi **Start editing** (**Inizia a modificare** in italiano).
 
-L’addon è disponibile solo nella barra laterale della Vista 3D. Le sue schede sono **Tema**, **Vista 3D** e **Dettagli**. L’interfaccia dell’addon e la [guida all’uso](docs/user/README.md) sono attualmente in italiano.
+L’addon è disponibile solo nella barra laterale della Vista 3D. Le sue schede sono **Theme**, **3D View** e **Details** (**Tema**, **Vista 3D** e **Dettagli** in italiano). L'inglese è la lingua predefinita. La traduzione italiana usa il sistema nativo di Blender: scegli l'italiano e attiva la traduzione dell'interfaccia nelle preferenze di Blender. I suggerimenti seguono l'impostazione separata per la traduzione dei tooltip. Nelle altre lingue i messaggi propri di Theme Studio restano in inglese. La [guida all’uso](docs/user/README.md) è attualmente in italiano.
 
 ## Uso sicuro
 
-Le modifiche al tema sono globali e visibili in tutti gli editor di Blender. Nascondere il pannello N non conclude una sessione di modifica. Scegli **Scarta modifiche…** per ripristinare i campi ancora gestiti dalla sessione, conservando le modifiche esterne rilevate, oppure **Termina…** per scegliere come concludere.
+Le modifiche al tema sono globali e visibili in tutti gli editor di Blender. Nascondere il pannello N non conclude una sessione di modifica. Scegli **Discard changes…** (**Scarta modifiche…**) per ripristinare i campi ancora gestiti dalla sessione, conservando le modifiche esterne rilevate, oppure **Finish…** (**Termina…**) per scegliere come concludere.
 
-Theme Studio non salva automaticamente le preferenze. **Salva tutte le preferenze…** scrive tutte le preferenze di Blender, non soltanto il tema. Durante un’anteprima temporanea, evita il salvataggio manuale delle preferenze di Blender. Se mantieni il tema senza salvarlo subito, il salvataggio automatico di Blender potrebbe salvarlo in seguito. I dati di recupero possono aiutare dopo un’interruzione, ma il recupero non è garantito: conserva una copia dei temi importanti.
+Theme Studio non salva automaticamente le preferenze. **Save all preferences…** (**Salva tutte le preferenze…**) scrive tutte le preferenze di Blender, non soltanto il tema. Durante un’anteprima temporanea, evita il salvataggio manuale delle preferenze di Blender. Se mantieni il tema senza salvarlo subito, il salvataggio automatico di Blender potrebbe salvarlo in seguito. I dati di recupero possono aiutare dopo un’interruzione, ma il recupero non è garantito: conserva una copia dei temi importanti.
 
 ## Feedback e segnalazioni
 
@@ -65,7 +65,7 @@ python -c "from pathlib import Path; Path('dist').mkdir(exist_ok=True)"
 python tools/build_dev_addon.py --output dist/theme_studio-0.4.0.zip
 ```
 
-Il builder usa la libreria standard di Python e include solo i file necessari dell’addon. Non sovrascrive ZIP esistenti: scegli un nuovo nome per un’altra build. È uno ZIP locale di un addon legacy, non una Blender Extension. Lo ZIP 0.4.0 è un candidato locale, non una release pubblicata.
+Il builder usa la libreria standard di Python e include solo i file necessari dell’addon. Non sovrascrive ZIP esistenti: scegli un nuovo nome per un’altra build. È uno ZIP di un addon legacy per installazione locale, non una Blender Extension. La versione 0.4.0 è un'anteprima iniziale; consulta le [Releases](https://github.com/charliepvc/blender-theme-studio/releases) per download disponibili e limiti noti.
 
 ## Link
 
