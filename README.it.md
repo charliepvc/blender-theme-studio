@@ -1,78 +1,107 @@
-<p align="center">
-  <img src="theme_studio/logo.svg" width="120" alt="Logo Theme Studio" />
+<p>
+  <img src="theme_studio/logo.svg" width="72" alt="Logo di Theme Studio" />
 </p>
 
-<p align="center"><a href="README.md">English</a> · <strong>Italiano</strong></p>
+<p><a href="README.md">English</a> · <strong>Italiano</strong></p>
 
-<h1 align="center">Dai forma al tema dell’interfaccia di Blender.</h1>
+# Blender Theme Studio
 
-<p align="center">Uno spazio dedicato per esplorare, regolare e provare in sicurezza i colori del tema di Blender.</p>
+## Dai forma all’interfaccia di Blender, a modo tuo.
 
-Theme Studio modifica live il tema globale di Blender, con sessioni reversibili e controlli raggruppati per significato. Non serve un passaggio separato per applicare le modifiche.
+Esplora più facilmente le numerose impostazioni del tema di Blender. Theme Studio raggruppa i colori correlati per funzione, permette di modificarli in tempo reale e rende reversibile ogni sessione di lavoro.
 
-## Cosa offre
+![Blender Theme Studio aperto nella Vista 3D di Blender, con il pannello dell’addon accanto alla scritta “Theme Studio”](docs/media/hero.jpg)
 
-- Regola insieme colori correlati, poi affina i singoli campi.
-- Esplora i controlli per categoria e contesto, compresi i colori della Vista 3D.
-- Annulla e ripeti le modifiche; scarta una sessione per ripristinare i campi ancora gestiti dall’addon.
-- Salva una copia del tema separatamente dalle preferenze di Blender.
+La schermata hero è stata acquisita con una build Beta di Blender 5.3.0; non dimostra la compatibilità di questa versione localizzata con Blender 5.3.
 
-## Screenshot
+## Scarica l’anteprima
 
-Catture reali di una sessione di modifica con l'interfaccia italiana. L'addon usa l'inglese come lingua predefinita e supporta anche l'italiano; i colori mostrati sono esempi, non un preset incluso.
+[**Scarica Theme Studio 0.4.0 per Blender 5.2.1 LTS**](https://github.com/charliepvc/blender-theme-studio/releases/download/v0.4.0/theme_studio-0.4.0.zip) · [Note di rilascio e limiti noti](https://github.com/charliepvc/blender-theme-studio/releases/tag/v0.4.0)
 
-**Controlli del tema**
+**Versione di anteprima.** Installa lo ZIP dalle preferenze degli addon di Blender: è un addon legacy per installazione locale, non una Blender Extension. La build di riferimento è Blender **5.2.1 LTS**.
 
-![Scheda Tema di Theme Studio con gruppi di colori collegati e arrotondamento dei controlli](docs/media/theme-panel.png)
+## Guarda Theme Studio in azione
 
-**Controlli della Vista 3D**
+La demo di 30 secondi mostra la modifica dei colori collegati, l’aggiornamento immediato dell’interfaccia, le regolazioni di dettaglio e i comandi della sessione. La GIF pesa 29,6 MB: si apre solo su richiesta, senza caricarsi automaticamente insieme al README.
 
-![Scheda Vista 3D di Theme Studio con colori di sfondo, testi, selezione e griglia](docs/media/viewport-panel.png)
+[**Guarda la demo di Theme Studio (GIF, 29,6 MB)**](docs/media/demo.gif)
 
-## Compatibilità
+La demo dovrebbe mostrare una sessione reale: modifica un gruppo di colori collegati, osserva il cambiamento in Blender, regola un singolo campo in Dettagli, poi annulla o scarta le modifiche.
 
-| Blender | Stato |
-| --- | --- |
-| **5.2.1 LTS** | Build di riferimento per la prima versione |
-| **5.3.x** | Famiglia di sviluppo; verifiche effettuate solo su specifiche build Beta |
-| **Altre versioni** | Non verificate; il fallback basato sulla versione non garantisce la compatibilità |
+## Un modo più diretto per dare forma ai colori di Blender
+
+### Modifica insieme i colori correlati
+
+Regola gruppi selezionati, come sfondi, pannelli, testo, controlli, bordi e selezione. Apri Dettagli quando vuoi intervenire sui singoli campi.
+
+### Osserva subito il risultato
+
+Le modifiche aggiornano in tempo reale il tema globale di Blender. Confronta il tema iniziale con le modifiche correnti e usa i comandi di annullamento e ripetizione durante la sessione.
+
+### Mantieni il controllo
+
+Scarta le modifiche per ripristinare i campi ancora gestiti dalla sessione, conservando le modifiche esterne rilevate. Oppure termina mantenendo il tema live. Se vuoi riaprire il tema in seguito, salvalo in un file separato.
+
+## Nell’interfaccia di Blender
+
+Queste schermate autentiche mostrano Theme Studio con l’interfaccia italiana di Blender. L’inglese è la lingua predefinita dell’addon; l’italiano è disponibile tramite il sistema di traduzione nativo di Blender. I colori mostrati sono esempi, non preset inclusi.
+
+**Controlli del tema** — Regola i colori correlati dell’interfaccia e l’arrotondamento dei controlli.
+
+![Scheda Theme di Theme Studio nell’interfaccia italiana di Blender, con gruppi di colori collegati e arrotondamento dei controlli](docs/media/theme-panel.png)
+
+**Controlli della Vista 3D** — Regola sfondi, intestazioni, testo, selezione e guide del viewport.
+
+![Scheda 3D View di Theme Studio nell’interfaccia italiana di Blender, con controlli per sfondo del viewport, testo, selezione e griglia](docs/media/viewport-panel.png)
 
 ## Installazione
 
-1. Quando disponibile, scarica `theme_studio-0.4.0.zip` dalla sezione [Releases](https://github.com/charliepvc/blender-theme-studio/releases). Usa lo ZIP dell’addon, non l’archivio dei sorgenti GitHub.
-2. In Blender, apri `Edit > Preferences > Add-ons` e installa da disco.
-3. Seleziona lo ZIP e attiva **Theme Studio**.
-4. Apri la barra laterale della Vista 3D con **N**, scegli **Theme Studio**, poi **Start editing** (**Inizia a modificare** in italiano).
+1. Scarica [`theme_studio-0.4.0.zip`](https://github.com/charliepvc/blender-theme-studio/releases/download/v0.4.0/theme_studio-0.4.0.zip). Non usare l’archivio dei sorgenti generato automaticamente da GitHub.
+2. In Blender, apri **Edit → Preferences → Add-ons** e scegli **Install from Disk**.
+3. Seleziona lo ZIP scaricato e attiva **Theme Studio** nell’elenco degli addon.
+4. Nella Vista 3D, premi **N** per aprire la barra laterale. Scegli **Theme Studio**, poi **Start editing** (**Inizia a modificare**).
 
-L’addon è disponibile solo nella barra laterale della Vista 3D. Le sue schede sono **Theme**, **3D View** e **Details** (**Tema**, **Vista 3D** e **Dettagli** in italiano). L'inglese è la lingua predefinita. La traduzione italiana usa il sistema nativo di Blender: scegli l'italiano e attiva la traduzione dell'interfaccia nelle preferenze di Blender. I suggerimenti seguono l'impostazione separata per la traduzione dei tooltip. Nelle altre lingue i messaggi propri di Theme Studio restano in inglese. La [guida all’uso](docs/user/README.md) è attualmente in italiano.
+Theme Studio si trova nella barra laterale della Vista 3D. Le sue pagine sono **Theme** (**Tema**), **3D View** (**Vista 3D**) e **Details** (**Dettagli**). La lingua predefinita è l’inglese. Per usare la traduzione italiana fornita, seleziona l’italiano e attiva la traduzione **Interface** nelle preferenze di Blender; la traduzione dei tooltip segue un’impostazione separata.
 
-## Uso sicuro
+## Compatibilità
 
-Le modifiche al tema sono globali e visibili in tutti gli editor di Blender. Nascondere il pannello N non conclude una sessione di modifica. Scegli **Discard changes…** (**Scarta modifiche…**) per ripristinare i campi ancora gestiti dalla sessione, conservando le modifiche esterne rilevate, oppure **Finish…** (**Termina…**) per scegliere come concludere.
+| Versione di Blender | Stato |
+| --- | --- |
+| **5.2.1 LTS** | Build di riferimento; verificati installazione dello ZIP localizzato e flussi di lavoro principali. |
+| **5.3.x** | Famiglia di sviluppo. Le verifiche precedenti riguardavano specifiche build Beta; questa versione localizzata non è stata verificata nuovamente su 5.3. |
+| **Altre versioni** | Non verificate. Il fallback del catalogo basato sulla versione di Blender non dimostra la compatibilità. |
 
-Theme Studio non salva automaticamente le preferenze. **Save all preferences…** (**Salva tutte le preferenze…**) scrive tutte le preferenze di Blender, non soltanto il tema. Durante un’anteprima temporanea, evita il salvataggio manuale delle preferenze di Blender. Se mantieni il tema senza salvarlo subito, il salvataggio automatico di Blender potrebbe salvarlo in seguito. I dati di recupero possono aiutare dopo un’interruzione, ma il recupero non è garantito: conserva una copia dei temi importanti.
+## Importante: come funzionano le modifiche al tema
 
-## Feedback e segnalazioni
+- **Le modifiche sono globali.** Gli altri editor di Blender mostrano il tema modificato durante la sessione.
+- **Nascondere la barra laterale N non termina la sessione.** Termina o scarta la sessione prima di chiudere Blender.
+- **Scarta e Termina hanno effetti diversi.** **Discard changes…** (**Scarta le modifiche…**) tenta di ripristinare i campi gestiti dalla sessione e segnala i conflitti; le modifiche esterne rilevate vengono conservate. **Finish…** (**Termina…**) permette di mantenere il tema live, salvandolo esplicitamente oppure no.
+- **Theme Studio non salva automaticamente le preferenze di Blender.** **Save all preferences…** (**Salva tutte le preferenze…**) salva tutte le preferenze di Blender, non solo il tema. Durante un’anteprima temporanea, evita il salvataggio manuale delle preferenze.
+- **Mantenere il tema senza salvarlo non lo rende permanente.** Se attivo, il salvataggio automatico di Blender potrebbe salvare il tema live in seguito. I dati di recupero possono aiutare dopo un’interruzione, ma non garantiscono il recupero. Per i lavori importanti, conserva una copia separata del tema.
 
-Aiuta a migliorare Theme Studio condividendo bug, comportamenti poco chiari e suggerimenti tramite le [GitHub Issues](https://github.com/charliepvc/blender-theme-studio/issues). Sono particolarmente utili i riscontri sui gruppi di colori collegati e sui pattern: spiega cosa hai modificato, cosa ti aspettavi e cosa è successo invece.
+## Segnalazioni e suggerimenti
 
-Per i bug, indica versione e hash della build di Blender, versione di Theme Studio, sistema operativo e passaggi per riprodurre il problema. Se possibile, aggiungi uno screenshot dell'area interessata o il messaggio di errore esatto. Rimuovi le informazioni personali da screenshot e log; non caricare preferenze di Blender o file di recupero contenenti dati privati.
+[Segnala un problema o proponi un miglioramento nelle GitHub Issues](https://github.com/charliepvc/blender-theme-studio/issues). Per una segnalazione utile, indica versione e hash della build di Blender, versione di Theme Studio, sistema operativo, passaggi per riprodurre il problema e risultato atteso e ottenuto. Se possibile, aggiungi uno screenshot o il messaggio di errore esatto. Rimuovi le informazioni personali; non caricare preferenze di Blender o file di recupero privati.
 
-## Creazione dai sorgenti
+Sono particolarmente utili i riscontri sui gruppi di colori collegati: descrivi quali colori hai modificato e quale risultato ti aspettavi.
+
+## Documentazione e sviluppo
+
+- [Guida all’uso](docs/user/README.md)
+- [Roadmap](ROADMAP.md)
+- [Tutte le release e note di rilascio](https://github.com/charliepvc/blender-theme-studio/releases)
+- [Istruzioni per creare il pacchetto dai sorgenti](#creazione-dai-sorgenti)
+- [Licenza GPL-3.0](LICENSE)
+
+### Creazione dai sorgenti
+
+Il builder di questo repository crea uno ZIP locale per addon legacy, non una Blender Extension. Crea prima la cartella di destinazione; il builder non sovrascrive i file esistenti.
 
 ```bash
 python -c "from pathlib import Path; Path('dist').mkdir(exist_ok=True)"
 python tools/build_dev_addon.py --output dist/theme_studio-0.4.0.zip
 ```
 
-Il builder usa la libreria standard di Python e include solo i file necessari dell’addon. Non sovrascrive ZIP esistenti: scegli un nuovo nome per un’altra build. È uno ZIP di un addon legacy per installazione locale, non una Blender Extension. La versione 0.4.0 è un'anteprima iniziale; consulta le [Releases](https://github.com/charliepvc/blender-theme-studio/releases) per download disponibili e limiti noti.
-
-## Link
-
-- [Releases](https://github.com/charliepvc/blender-theme-studio/releases) · download quando disponibili
-- [Roadmap (in italiano)](ROADMAP.md)
-- [Guida all’uso (in italiano)](docs/user/README.md)
-
 ## Licenza
 
-[GPL-3.0](LICENSE)
+Theme Studio è distribuito secondo la [GNU General Public License versione 3.0](LICENSE).

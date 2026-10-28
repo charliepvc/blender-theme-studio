@@ -1,78 +1,107 @@
-<p align="center">
-  <img src="theme_studio/logo.svg" width="120" alt="Theme Studio logo" />
+<p>
+  <img src="theme_studio/logo.svg" width="72" alt="Theme Studio logo" />
 </p>
 
-<p align="center"><strong>English</strong> · <a href="README.it.md">Italiano</a></p>
+<p><strong>English</strong> · <a href="README.it.md">Italiano</a></p>
 
-<h1 align="center">Shape Blender’s interface theme.</h1>
+# Blender Theme Studio
 
-<p align="center">A focused workspace for exploring, adjusting, and safely trying Blender theme colors.</p>
+## Shape Blender’s interface, your way.
 
-Theme Studio edits Blender’s global theme live, with reversible sessions and controls grouped by meaning. No separate Apply step.
+Make Blender’s extensive theme controls easier to explore. Theme Studio groups related colors by purpose, lets you adjust them live, and keeps each editing session reversible.
 
-## What it does
+![Blender Theme Studio open in Blender’s 3D View, with the Theme Studio panel beside a large “Theme Studio” title](docs/media/hero.jpg)
 
-- Adjust related interface colors together, then fine-tune individual fields.
-- Browse theme controls by category and context, including 3D View colors.
-- Undo and redo edits; discard a session to restore fields still owned by it.
-- Save a theme copy separately from Blender preferences.
+The hero capture is from a Blender 5.3.0 Beta build; it does not establish compatibility for this localized release on 5.3.
 
-## Screenshots
+## Download the preview
 
-Real captures from an editing session with the Italian interface. The add-on defaults to English and also supports Italian; colors shown are examples, not a bundled preset.
+[**Download Theme Studio 0.4.0 for Blender 5.2.1 LTS**](https://github.com/charliepvc/blender-theme-studio/releases/download/v0.4.0/theme_studio-0.4.0.zip) · [Release notes and known limitations](https://github.com/charliepvc/blender-theme-studio/releases/tag/v0.4.0)
 
-**Theme controls**
+**Preview release.** Install the ZIP from Blender’s add-on preferences; this is a local legacy add-on, not a Blender Extension. The reference build is Blender **5.2.1 LTS**.
 
-![Theme Studio Theme tab with linked color groups and control roundness](docs/media/theme-panel.png)
+## See Theme Studio in action
 
-**3D View controls**
+The 30-second demonstration shows linked-color editing, immediate interface updates, detailed adjustments, and session controls. The GIF is 29.6 MB, so it opens on demand instead of loading automatically with the README.
 
-![Theme Studio 3D View tab with background, text, selection, and grid colors](docs/media/viewport-panel.png)
+[**Watch the Theme Studio demo (GIF, 29.6 MB)**](docs/media/demo.gif)
 
-## Compatibility
+The demo should follow one real editing session: adjust a linked color group, see the change across Blender, fine-tune a field in Details, then undo or discard the changes.
 
-| Blender | Status |
-| --- | --- |
-| **5.2.1 LTS** | Reference build for the first release |
-| **5.3.x** | Development family; checks cover specific Beta builds only |
-| **Other versions** | Not verified; version-based fallback does not guarantee compatibility |
+## A more direct way to shape Blender’s colors
+
+### Work with related colors
+
+Adjust curated groups such as backgrounds, panels, text, controls, borders, and selection together. Open Details when you need to work with individual fields.
+
+### See changes as you make them
+
+Edits update Blender’s global theme live. Compare the initial theme with your current changes, and use Theme Studio’s undo and redo controls during the session.
+
+### Keep control of the outcome
+
+Discard changes to restore fields still owned by the session while preserving detected external edits. Or finish while keeping the live theme. Save a separate theme copy when you want a file to reopen later.
+
+## Inside Blender
+
+These authentic captures show Theme Studio with Blender’s Italian interface. English is the add-on’s default; Italian is available through Blender’s native translation settings. The colors shown are examples, not bundled presets.
+
+**Theme controls** — Adjust related interface colors and control roundness.
+
+![Theme Studio’s Theme tab in Blender’s Italian interface, showing linked color groups and control roundness](docs/media/theme-panel.png)
+
+**3D View controls** — Adjust viewport backgrounds, headers, text, selection, and guides.
+
+![Theme Studio’s 3D View tab in Blender’s Italian interface, showing viewport background, text, selection, and grid controls](docs/media/viewport-panel.png)
 
 ## Install
 
-1. Download `theme_studio-0.4.0.zip` from [Releases](https://github.com/charliepvc/blender-theme-studio/releases) when available. Use the add-on ZIP, not GitHub’s source archive.
-2. In Blender, open `Edit > Preferences > Add-ons` and install from disk.
-3. Select the ZIP and enable **Theme Studio**.
-4. Open the 3D View sidebar with **N**, choose **Theme Studio**, then **Start editing**.
+1. Download [`theme_studio-0.4.0.zip`](https://github.com/charliepvc/blender-theme-studio/releases/download/v0.4.0/theme_studio-0.4.0.zip). Do not use GitHub’s automatically generated source archive.
+2. In Blender, open **Edit → Preferences → Add-ons** and choose **Install from Disk**.
+3. Select the downloaded ZIP and enable **Theme Studio** in the add-ons list.
+4. In the 3D View, press **N** to open the sidebar. Choose **Theme Studio**, then **Start editing**.
 
-The add-on currently appears only in the 3D View sidebar. Its tabs are **Theme**, **3D View**, and **Details**. English is the default interface language. Italian is supplied through Blender's native translations: choose Italian and enable **Interface** translation in Blender's preferences. Tooltips follow Blender's separate tooltip translation setting. Other languages use the English source text for Theme Studio's own messages. The [user guide](docs/user/README.md) is currently in Italian.
+Theme Studio currently lives in the 3D View sidebar. Its pages are **Theme**, **3D View**, and **Details**. The interface defaults to English. To use the supplied Italian translation, select Italian and enable Blender’s **Interface** translation; tooltip translation follows its separate Blender setting.
 
-## Use safely
+## Compatibility
 
-Theme changes are global and visible across Blender editors. Hiding the N-panel does not end an editing session. Choose **Discard changes…** to restore session-owned fields while preserving detected external changes, or **Finish…** to choose how to end the session.
+| Blender version | Status |
+| --- | --- |
+| **5.2.1 LTS** | Reference build; localized release ZIP installation and core workflows verified. |
+| **5.3.x** | Development family. Earlier checks covered specific Beta builds; this localized release was not re-verified on 5.3. |
+| **Other versions** | Not verified. Catalog fallback based on Blender version does not establish compatibility. |
 
-Theme Studio does not automatically save preferences. **Save all preferences…** writes all Blender preferences, not only the theme. Avoid Blender's manual preference save during a temporary preview. After keeping a theme without saving immediately, Blender's own auto-save may save it later. Recovery data can help after an interruption, but recovery is not guaranteed; keep a copy of important themes.
+## Important: how theme changes work
 
-## Feedback and issues
+- **Changes are global.** Other Blender editors reflect theme edits while a session is active.
+- **Hiding the N-panel does not end a session.** Finish or discard the session before closing Blender.
+- **Discard and Finish do different things.** **Discard changes…** attempts to restore session-owned fields and reports conflicts; detected external changes are preserved. **Finish…** lets you keep the live theme, with or without an explicit save.
+- **Theme Studio does not automatically save Blender preferences.** **Save all preferences…** writes all Blender preferences, not just the theme. Avoid Blender’s manual preference save during a temporary preview.
+- **Keeping without saving is not permanent storage.** Blender’s auto-save may save the live theme later if enabled. Recovery data can help after an interruption, but recovery is not guaranteed. Keep a separate theme copy for important work.
 
-Help shape Theme Studio by sharing bugs, confusing behavior, and suggestions through [GitHub Issues](https://github.com/charliepvc/blender-theme-studio/issues). Feedback on linked color groups and patterns is especially welcome: explain what you changed, what you expected, and what happened instead.
+## Feedback
 
-For bugs, include your Blender version and build hash, Theme Studio version, operating system, and steps to reproduce. If possible, add a screenshot showing the affected area or the exact error message. Remove personal information from screenshots and logs; do not upload Blender preferences or recovery files containing private data.
+[Report a bug or suggest an improvement in GitHub Issues](https://github.com/charliepvc/blender-theme-studio/issues). For useful bug reports, include Blender version and build hash, Theme Studio version, operating system, steps to reproduce, and expected versus actual results. Screenshots or the exact error message can help. Remove personal information; do not upload Blender preferences or private recovery files.
 
-## Build from source
+Feedback on linked color groups is especially useful: describe which colors you changed and what result you expected.
+
+## Documentation and development
+
+- [User guide (Italian)](docs/user/README.md)
+- [Roadmap (Italian)](ROADMAP.md)
+- [All releases and release notes](https://github.com/charliepvc/blender-theme-studio/releases)
+- [Source build instructions](#build-from-source)
+- [GPL-3.0 license](LICENSE)
+
+### Build from source
+
+This repository’s builder creates a local legacy add-on ZIP. It does not create a Blender Extension. Create the output directory first; the builder refuses to overwrite an existing file.
 
 ```bash
 python -c "from pathlib import Path; Path('dist').mkdir(exist_ok=True)"
 python tools/build_dev_addon.py --output dist/theme_studio-0.4.0.zip
 ```
 
-The builder uses Python’s standard library and includes only required add-on files. It refuses to overwrite an existing ZIP; choose a new filename for another build. This is a legacy add-on ZIP for local installation, not a Blender Extension. Version 0.4.0 is an early preview; see [Releases](https://github.com/charliepvc/blender-theme-studio/releases) for available downloads and known limitations.
-
-## Links
-
-- [Releases](https://github.com/charliepvc/blender-theme-studio/releases) · downloads when available
-- [Roadmap (Italian)](ROADMAP.md)
-- [User guide (Italian)](docs/user/README.md)
-
 ## License
 
-[GPL-3.0](LICENSE)
+Theme Studio is distributed under the [GNU General Public License v3.0](LICENSE).
