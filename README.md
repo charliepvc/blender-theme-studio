@@ -26,8 +26,6 @@ The 30-second demonstration shows linked-color editing, immediate interface upda
 
 ![30-second Theme Studio demo showing linked color edits, live Blender updates, detailed controls, and session actions](docs/media/demo.gif)
 
-The demo should follow one real editing session: adjust a linked color group, see the change across Blender, fine-tune a field in Details, then undo or discard the changes.
-
 ## A more direct way to shape Blender’s colors
 
 ### Work with related colors

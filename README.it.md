@@ -26,8 +26,6 @@ La demo di 30 secondi mostra la modifica dei colori collegati, l’aggiornamento
 
 ![Demo di 30 secondi di Theme Studio: modifica dei colori collegati, aggiornamenti live in Blender, controlli di dettaglio e azioni della sessione](docs/media/demo.gif)
 
-La demo dovrebbe mostrare una sessione reale: modifica un gruppo di colori collegati, osserva il cambiamento in Blender, regola un singolo campo in Dettagli, poi annulla o scarta le modifiche.
-
 ## Un modo più diretto per dare forma ai colori di Blender
 
 ### Modifica insieme i colori correlati
