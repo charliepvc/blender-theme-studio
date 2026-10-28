@@ -85,8 +85,8 @@ Sono particolarmente utili i riscontri sui gruppi di colori collegati: descrivi 
 
 ## Documentazione e sviluppo
 
-- [Guida all’uso](docs/user/README.md)
-- [Roadmap](ROADMAP.md)
+- [Guida all’uso (English)](docs/user/README.md) · [Italiano](docs/user/README.it.md)
+- [Roadmap (English)](ROADMAP.md) · [Italiano](ROADMAP.it.md)
 - [Tutte le release e note di rilascio](https://github.com/charliepvc/blender-theme-studio/releases)
 - [Istruzioni per creare il pacchetto dai sorgenti](#creazione-dai-sorgenti)
 - [Licenza GPL-3.0](LICENSE)

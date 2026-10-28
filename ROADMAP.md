@@ -1,56 +1,103 @@
-# ROADMAP
+# Roadmap
 
-Questo documento traccia lo sviluppo di Theme Studio. È pensato per essere realistico, per scaglioni e in linea con la filosofia del progetto: **sicuro, reversibile, semantico**.
+<p><strong>English</strong> · <a href="ROADMAP.it.md">Italiano</a></p>
 
-## Stato attuale
-- **v0.4.0** – Versione locale candidata alla prima pubblicazione, distribuita come ZIP legacy. Build di riferimento **Blender 5.2.1 LTS** e sviluppo sulla famiglia **5.3.x**, con fallback per versione. Live editing, RGBA nello stesso selettore, Undo/Redo con coalescing e recupero da journal. Il salvataggio di tutte le preferenze richiede un'azione esplicita.
+This roadmap describes possible development in realistic steps, guided by three
+principles: **safe, reversible, and semantic**. Priorities may change with user
+feedback and technical validation.
 
-## Pianificazione
+## Current status
 
-### v0.5.0 – Focus contestuale & navigazione *(PRIORITÀ MASSIMA)*
-L'obiettivo è rendere **Dettagli** più immediato per chi usa l'addon per la prima volta. Si basa interamente sull'infrastruttura già esistente.
+- **v0.4.0 Preview** — Published as a local-install legacy add-on ZIP, not a
+  Blender Extension. Blender **5.2.1 LTS** is the reference build; development
+  targets the **5.3.x** family, but version-based catalog fallback does not
+  establish compatibility. Current features include live editing, RGBA controls,
+  coalesced undo/redo, and journal-based recovery. Saving all Blender preferences
+  requires explicit user action.
 
-- [ ] **Scelta posizione UI: Themes o N-panel** – Aggiungere un'opzione nelle preferenze dell'addon per scegliere dove posizionare Theme Studio: nella sezione **Themes** delle Preferenze di Blender, oppure nel pannello **N-panel** della Vista 3D (comportamento attuale). Le due modalità devono condividere esattamente la stessa logica di sessione, live editing, history/undo e ripristino.
-- [ ] **Salto diretto ai Dettagli** – Dai gruppi principali (Tema/Vista 3D) è possibile passare direttamente alla vista Dettagli con categoria e contesto prefiltrati.
-- [ ] **Breadcrumb contestuale** – Mostrare il percorso di provenienza (es. `Dettagli › Testi › Controlli`) per orientarsi subito.
-- [ ] **"Modificando: ..."** – Indicazione chiara in alto quando si arriva ai Dettagli da un gruppo specifico.
-- [ ] **Aree influenzate** – Spiegazione visiva di quali parti dell'interfaccia vengono toccate da quel gruppo semantico.
-- [ ] **Miglior chiarezza dei collegamenti** – Rendere più esplicito il significato di "Segue le modifiche comuni" / "Solo questo" e della mappa tra campi collegati.
-- [ ] **Revisione dell'intelligenza dei pattern** – Rivedere come i gruppi semantici collegano e trasformano i colori: alcuni risultati non sono ancora convincenti. Raccogliere casi concreti e feedback su risultato atteso e ottenuto prima di correggere regole e associazioni, preservando controllo sui singoli campi e reversibilità.
+## Planned
 
-### v0.6.0 – Passaggio a Blender Extension
-Il salto "vero" dal punto di vista della distribuzione. Fatto **dopo** le modifiche di UX per evitare lavoro doppio.
+### v0.5.0 — Contextual focus and navigation *(highest priority)*
 
-- [ ] **`blender_manifest.toml`** – Creazione e configurazione del manifest per il formato Extension di Blender 4.2+.
-- [ ] **Adattamento `__init__.py` / registrazione** – Sistemazione per la nuova struttura mantenendo il comportamento attuale.
-- [ ] **Verifica su 5.2.1 LTS e 5.3.x** – Test completo in storage isolato su entrambe le famiglie.
-- [ ] **Aggiornamento documentazione** – Nuove istruzioni di installazione (Blender Extensions) aggiornando `README.md` e `docs/user/README.md`.
-- [ ] **Preparazione per `extensions.blender.org`** – Verifica requisiti e metadata in vista di un'eventuale pubblicazione ufficiale.
+Make **Details** easier to understand and navigate for first-time users, using
+the existing semantic groups and field routing.
 
-### v0.7.0 – Scheda "Palette"
-Introduzione di una vera e propria identità visiva per Theme Studio. Approccio matematico, niente generatori AI.
+- [ ] **Choose the UI location: Themes or N-panel** — Add an add-on preference
+  for placing Theme Studio in Blender Preferences > Themes or in the 3D View
+  N-panel (the current location). Both locations must share the same session,
+  live-editing, history, and restore behavior.
+- [ ] **Jump directly to Details** — Open Details from a main Theme or 3D View
+  group, with its category and context already filtered.
+- [ ] **Context breadcrumb** — Show the source path, such as
+  `Details › Text › Controls`, to make the current selection easier to follow.
+- [ ] **“Editing: …” indicator** — Identify the group that led to the current
+  Details view.
+- [ ] **Show affected interface areas** — Provide a static, group-based visual
+  explanation of which Blender interface regions a semantic color group affects.
+  This uses curated mappings; it is not a picker for arbitrary UI elements.
+- [ ] **Clarify linked controls** — Explain “Follow common changes” versus
+  “Edit separately” and show how fields relate to a group.
+- [ ] **Review semantic color patterns** — Collect concrete expected-versus-
+  actual examples before revising how groups link or transform colors. Preserve
+  individual control and reversible editing.
 
-- [ ] **Nuova scheda "Palette"** – Affiancata alle schede esistenti `Tema / Vista 3D / Dettagli`.
-- [ ] **Palette predefinite** – Set curati applicabili per gruppi semantici mantenendo la reversibilità live.
-- [ ] **Armonie matematiche** – Generazione di palette coerenti da un colore base (complementare, analoga, triadica) usando `colorsys`.
-- [ ] **Palette personali** – Salvataggio e caricamento di palette custom, integrabili con il sistema profili esistente.
-- [ ] **Applicazione per gruppi** – Applicazione mirata ai gruppi semantici, senza toccare l'intero tema in modo indiscriminato.
+### v0.6.0 — Blender Extension packaging
 
-### v1.0 – Consolidamento
-Obiettivo: stabilità, chiarezza e solidità basate su feedback reale.
+Move to Blender’s Extension format after the planned UX work, to avoid repeating
+packaging changes.
 
-- [ ] **Polish UX** – Ritocchi mirati emersi dall'uso reale.
-- [ ] **Pulizia e rifinitura** – Revisione di edge-case, messaggi e coerenza generale.
-- [ ] **Stabilità generale** – Focus su robustezza più che su nuove feature.
-- [ ] **Documentazione definitiva** – README più completo con screenshot/GIF quando disponibili.
+- [ ] Create and configure `blender_manifest.toml` for Blender Extensions.
+- [ ] Adapt package structure and registration while preserving current behavior.
+- [ ] Complete isolated installation and workflow checks on Blender 5.2.1 LTS
+  and selected 5.3.x builds.
+- [ ] Update English and Italian installation documentation.
+- [ ] Assess Extension submission requirements and metadata before considering
+  publication on `extensions.blender.org`.
 
-## Idee da tenere d'occhio (non impegnative)
-- **Popover "Modifica rapida"** – Finestra contestuale più snella per i gruppi più usati.
-- **"Recenti"** – Accesso rapido agli ultimi campi modificati.
-- **Suggerimenti contrasto non automatici** – Solo indicativi, mai correttivi forzati.
-- **Miglior scoperta campi** – Ulteriori affinamenti sulla navigazione senza complicare l'interfaccia.
+### v0.7.0 — Palette workspace
 
-## Note
-- **v1.0 non è vincolata a tutte le voci sopra.** Può essere raggiunta anche se alcune idee restano aperte. Priorità è sempre la stabilità.
-- **Le modifiche grosse vengono prima delle Extensions.** Il formato di distribuzione viene sistemato una volta che l'UX è stabile.
-- **Compatibilità da verificare per ogni nuova versione.** Il fallback del catalogo non sostituisce le verifiche di installazione, funzionamento e ripristino.
+Give Theme Studio a curated palette workflow. Use mathematical color harmony,
+not AI-generated palettes.
+
+- [ ] Add a **Palette** page beside Theme, 3D View, and Details.
+- [ ] Offer curated palettes that can be applied reversibly to semantic groups.
+- [ ] Generate complementary, analogous, and triadic palettes from a base color
+  with Python’s `colorsys` module.
+- [ ] Save and load personal palettes, integrating them with the existing profile
+  system where appropriate.
+- [ ] Apply palettes to selected groups rather than indiscriminately to the whole
+  theme.
+
+### v1.0 — Consolidation
+
+Focus on stability and clarity based on real usage and feedback.
+
+- [ ] Refine UX based on observed use.
+- [ ] Review edge cases, messages, and consistency.
+- [ ] Prioritize robustness over new features.
+- [ ] Complete user documentation with screenshots or a demo when available.
+
+## Ideas to investigate *(not commitments)*
+
+- **Interface-target picker (exploratory)** — Let a user point to or click a
+  visible Blender UI element, such as a panel background, then select its mapped
+  theme field or fields in Details. This would select the theme target, not sample
+  a color. Blender’s ability to identify the pointed-to widget and map it
+  reliably to theme fields is unverified. Explore separately from the group-based
+  affected-areas visualizer; the two could complement each other, and neither is
+  currently known to replace the other.
+- **Quick Edit popover** — A smaller contextual editor for frequently used
+  groups.
+- **Recent fields** — Quick access to recently edited controls.
+- **Non-automatic contrast guidance** — Informational warnings only; never force
+  color corrections.
+- **Field discovery** — Improve navigation without adding unnecessary complexity.
+
+## Notes
+
+- Version 1.0 does not require every roadmap item to be complete. Stability is the
+  priority.
+- Major UX work comes before Extension packaging; settle the interface before
+  investing in a different distribution format.
+- Verify each Blender version explicitly. Catalog fallback does not replace
+  installation, workflow, and restore checks.

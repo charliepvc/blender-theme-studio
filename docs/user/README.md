@@ -1,74 +1,73 @@
-# Usare Theme Studio
+# Using Theme Studio
 
-Theme Studio modifica il tema globale di Blender. L'interfaccia attuale si trova
-nella Vista 3D, barra laterale **N > Theme Studio**. La scelta alternativa nella
-sezione Themes delle Preferenze è una funzione pianificata, non ancora presente.
+<p><strong>English</strong> · <a href="README.it.md">Italiano</a></p>
 
-La lingua predefinita dell'addon è l'inglese. Per usare la traduzione italiana,
-scegliere l'italiano e attivare la traduzione dell'interfaccia nelle preferenze
-di Blender; i tooltip seguono la relativa impostazione separata. Non serve uno
-ZIP diverso. Questa guida riporta i nomi inglesi e i corrispondenti italiani.
+Theme Studio edits Blender’s global theme. Find it in the 3D View sidebar under
+**N > Theme Studio**. A Preferences > Themes location is planned, but is not
+available yet.
 
-## Installazione
+The add-on’s default language is English. To use its Italian translation, select
+Italian and enable Blender’s interface translation preference. Tooltips follow
+Blender’s separate tooltip-translation setting.
 
-Installare lo ZIP dell'addon dalla funzione di installazione da disco nelle
-Preferenze di Blender, quindi attivare Theme Studio. Non installare lo ZIP dei
-sorgenti generato da GitHub. Per costruire il pacchetto dai sorgenti seguire il
-[README](../../README.it.md#creazione-dai-sorgenti).
+## Install
 
-## Modificare il tema
+Install the add-on ZIP from Blender’s **Install from Disk** option in Preferences,
+then enable Theme Studio. Do not install GitHub’s automatically generated source
+archive. See the [README](../../README.md#build-from-source) for source-build
+instructions.
 
-1. Premere **Start editing** (**Inizia a modificare**): viene preparata la copia iniziale.
-2. Usare **Theme** (**Tema**) per i gruppi comuni, **3D View** (**Vista 3D**) per il viewport e **Details** (**Dettagli**)
-   per i campi individuali filtrati per categoria e contesto.
-3. Le modifiche vengono applicate live. I colori RGBA espongono anche l'alpha;
-   i colori RGB non hanno una trasparenza modificabile.
-4. Usare annullamento e ripetizione dell'addon per la cronologia del tema.
-5. Salvare una copia del tema se si vuole conservarla e riaprirla in seguito.
+## Edit a theme
 
-I profili dell'addon sono file JSON, non preset XML nativi di Blender. La loro
-compatibilità è verificata rispetto al catalogo e all'identità della build.
-Non modificare l'identità del profilo per forzare il caricamento su altre build.
+1. Choose **Start editing**. Theme Studio prepares the initial copy; the theme
+   does not change until you edit a field.
+2. Use **Theme** for common color groups, **3D View** for viewport colors, and
+   **Details** for individual fields filtered by category and context.
+3. Changes update the theme live. RGBA fields expose alpha; RGB fields do not
+   provide an editable alpha channel.
+4. Use Theme Studio’s undo and redo controls to review edits during the session.
+5. Save a theme copy to a separate file if you want to keep and reopen it later.
 
-## Concludere una sessione
+Theme Studio profiles are JSON files, not Blender’s native XML presets. Profile
+compatibility is checked against the catalog and Blender build identity. Do not
+change a profile’s identity to force it to load on a different build.
 
-- **Discard changes…** (**Scarta modifiche…**) ripristina i campi ancora posseduti dalla sessione e
-  conserva, segnalando i conflitti, le modifiche esterne rilevate.
-- **Finish… > Use without saving now** (**Termina… > Usa senza salvare ora**) mantiene il tema live e chiude la
-  sessione senza salvare subito le preferenze. L'auto-save di Blender, se attivo,
-  può salvarle successivamente.
-- **Save all preferences…** (**Salva tutte le preferenze…**) salva l'intero insieme delle preferenze di
-  Blender, non soltanto il tema. Richiede una scelta esplicita.
+## Finish a session
 
-Nascondere il pannello N non conclude la sessione. Prima di chiudere Blender,
-concludere o scartare il lavoro. Durante una prova temporanea non premere il
-salvataggio manuale delle preferenze di Blender.
+- **Discard changes…** attempts to restore fields still owned by the session.
+  Detected external changes are preserved and reported.
+- **Finish… > Use without saving now** keeps the live theme and closes the
+  session without immediately saving preferences. Blender’s auto-save may save
+  them later if it is enabled.
+- **Save all preferences…** explicitly saves all Blender preferences, not only
+  the theme.
 
-## Errori e recupero
+Hiding the N-panel does not end the session. Finish or discard your work before
+closing Blender. During a temporary preview, do not manually save Blender’s
+preferences.
 
-Il journal conserva informazioni necessarie al recupero dopo un'interruzione.
-Un recupero pendente blocca la modifica finché non viene risolto. Seguire le
-azioni mostrate dal pannello e non cancellare il journal per aggirare il blocco.
-Le sessioni già concluse e validate non devono essere trattate come recuperi
-pendenti. Dopo un aggiornamento di Blender possono invece restare dati di una
-sessione non conclusa appartenenti a una build precedente: non vengono applicati
-automaticamente alla build nuova.
+## Errors and recovery
 
-**Keep data and continue…** (**Conserva i dati e continua…**) permette di mantenere il tema attuale senza
-ripristinare quello precedente. Dopo la conferma viene conservata una copia
-verificata dei dati di recupero; gli originali non vengono spostati o cancellati.
-L'addon ricorda la scelta soltanto per quei contenuti esatti. Se l'originale
-cambia o la copia non è più verificabile, i dati tornano a richiedere attenzione.
-Questa azione non salva le preferenze e non applica colori al tema corrente.
+The recovery journal stores information used to recover after an interruption.
+A pending recovery blocks editing until resolved. Follow the actions shown in the
+panel; do not delete the journal to bypass the block. Completed and validated
+sessions are not pending recoveries. After a Blender update, an unfinished
+session from another build may remain; it is not applied automatically to the
+new build.
 
-Le azioni di ripristino sono disponibili soltanto quando il recupero è compatibile
-e può essere eseguito. I percorsi dei file e gli errori completi rimangono nei
-dettagli tecnici, utili per l'assistenza; non serve modificarli manualmente per
-usare il normale flusso guidato.
+**Keep data and continue…** keeps the current theme without restoring the earlier
+one. After confirmation, Theme Studio verifies and keeps a copy of the recovery
+data; it does not move or delete the originals. The decision applies only to
+those exact contents. If an original changes or the copy can no longer be
+verified, the data requires attention again. This action does not save
+preferences or apply colors to the current theme.
 
-Se vengono segnalati conflitti, non assumere che tutti i campi siano stati
-ripristinati: controllare l'esito prima di salvare le preferenze.
+Restore actions are available only when recovery data is compatible and can be
+executed. File paths and complete error details remain available in technical
+details; you do not need to edit them manually for the guided workflow.
 
-Prima di prove importanti conservare una copia del proprio tema. Il recupero
-riduce il rischio, ma non è una garanzia contro qualsiasi guasto o modifica
-esterna.
+If Theme Studio reports conflicts, do not assume every field was restored.
+Review the result before saving preferences.
+
+Keep a theme copy before important experiments. Recovery reduces risk, but does
+not guarantee protection from every failure or external change.

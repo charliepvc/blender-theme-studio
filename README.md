@@ -85,8 +85,8 @@ Feedback on linked color groups is especially useful: describe which colors you 
 
 ## Documentation and development
 
-- [User guide (Italian)](docs/user/README.md)
-- [Roadmap (Italian)](ROADMAP.md)
+- [User guide (English)](docs/user/README.md) · [Italiano](docs/user/README.it.md)
+- [Roadmap (English)](ROADMAP.md) · [Italiano](ROADMAP.it.md)
 - [All releases and release notes](https://github.com/charliepvc/blender-theme-studio/releases)
 - [Source build instructions](#build-from-source)
 - [GPL-3.0 license](LICENSE)
