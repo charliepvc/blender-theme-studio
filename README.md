@@ -22,9 +22,9 @@ The hero capture is from a Blender 5.3.0 Beta build; it does not establish compa
 
 ## See Theme Studio in action
 
-The 30-second demonstration shows linked-color editing, immediate interface updates, detailed adjustments, and session controls. The GIF is 29.6 MB, so it opens on demand instead of loading automatically with the README.
+The 30-second demonstration shows linked-color editing, immediate interface updates, detailed adjustments, and session controls.
 
-[**Watch the Theme Studio demo (GIF, 29.6 MB)**](docs/media/demo.gif)
+![30-second Theme Studio demo showing linked color edits, live Blender updates, detailed controls, and session actions](docs/media/demo.gif)
 
 The demo should follow one real editing session: adjust a linked color group, see the change across Blender, fine-tune a field in Details, then undo or discard the changes.
 

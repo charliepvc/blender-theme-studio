@@ -22,9 +22,9 @@ La schermata hero è stata acquisita con una build Beta di Blender 5.3.0; non di
 
 ## Guarda Theme Studio in azione
 
-La demo di 30 secondi mostra la modifica dei colori collegati, l’aggiornamento immediato dell’interfaccia, le regolazioni di dettaglio e i comandi della sessione. La GIF pesa 29,6 MB: si apre solo su richiesta, senza caricarsi automaticamente insieme al README.
+La demo di 30 secondi mostra la modifica dei colori collegati, l’aggiornamento immediato dell’interfaccia, le regolazioni di dettaglio e i comandi della sessione.
 
-[**Guarda la demo di Theme Studio (GIF, 29,6 MB)**](docs/media/demo.gif)
+![Demo di 30 secondi di Theme Studio: modifica dei colori collegati, aggiornamenti live in Blender, controlli di dettaglio e azioni della sessione](docs/media/demo.gif)
 
 La demo dovrebbe mostrare una sessione reale: modifica un gruppo di colori collegati, osserva il cambiamento in Blender, regola un singolo campo in Dettagli, poi annulla o scarta le modifiche.
 
