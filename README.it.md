@@ -16,7 +16,7 @@ La schermata hero è stata acquisita con una build Beta di Blender 5.3.0; non di
 
 ## Scarica l’anteprima
 
-[**Scarica Theme Studio 0.4.0 per Blender 5.2.1 LTS**](https://github.com/charliepvc/blender-theme-studio/releases/download/v0.4.0/theme_studio-0.4.0.zip) · [Note di rilascio e limiti noti](https://github.com/charliepvc/blender-theme-studio/releases/tag/v0.4.0)
+[**Scarica Theme Studio 0.5.0 per Blender 5.2.1 LTS**](https://github.com/charliepvc/blender-theme-studio/releases/download/v0.5.0/theme_studio-0.5.0.zip) · [Note di rilascio e limiti noti](https://github.com/charliepvc/blender-theme-studio/releases/tag/v0.5.0)
 
 **Versione di anteprima.** Installa lo ZIP dalle preferenze degli addon di Blender: è un addon legacy per installazione locale, non una Blender Extension. La build di riferimento è Blender **5.2.1 LTS**.
 
@@ -32,6 +32,20 @@ La demo di 30 secondi mostra la modifica dei colori collegati, l’aggiornamento
 
 Regola gruppi selezionati, come sfondi, pannelli, testo, controlli, bordi e selezione. Apri Dettagli quando vuoi intervenire sui singoli campi.
 
+**Novità della v0.5:** Sette controlli comuni
+coordinano superfici, testi e stati d’interazione conservando le modifiche
+individuali. Il testo derivato può differire dagli RGB scelti, anche restando
+grigio quando si seleziona nero. Le nuove copie modificabili disattivano solo
+le ombre dei testi; i profili caricati conservano il loro aspetto salvato.
+Consulta la [guida utente](docs/user/README.it.md#colori-comuni-e-limiti-noti)
+e la [roadmap](ROADMAP.it.md) per comportamento e limiti residui.
+
+La versione 0.5 offre tre modalità nelle proprietà dell'addon: pannello N,
+ibrida (predefinita) e Preferenze → Temi. I Dettagli per categoria/contesto
+condividono una sessione tra le modalità. Il picker sperimentale è accantonato e
+inattivo. Aggiorna dalla v0.4.0 per usare queste funzioni; gli ZIP già installati
+non si aggiornano automaticamente.
+
 ### Osserva subito il risultato
 
 Le modifiche aggiornano in tempo reale il tema globale di Blender. Confronta il tema iniziale con le modifiche correnti e usa i comandi di annullamento e ripetizione durante la sessione.
@@ -40,9 +54,17 @@ Le modifiche aggiornano in tempo reale il tema globale di Blender. Confronta il 
 
 Scarta le modifiche per ripristinare i campi ancora gestiti dalla sessione, conservando le modifiche esterne rilevate. Oppure termina mantenendo il tema live. Se vuoi riaprire il tema in seguito, salvalo in un file separato.
 
+La versione 0.5 include salvataggio XML nativo con nome, caricamento dei preset
+nativi ed esportazione di copie XML, separati dai progetti modificabili Theme Studio.
+Il salvataggio scrive nella cartella `themes` della libreria scelta e nei preset
+utente di Blender. Consulta la
+[guida utente](docs/user/README.it.md#salvare-e-caricare-temi-nativi-blender)
+per ambito e limiti.
+
 ## Nell’interfaccia di Blender
 
 Queste schermate autentiche mostrano Theme Studio con l’interfaccia italiana di Blender. L’inglese è la lingua predefinita dell’addon; l’italiano è disponibile tramite il sistema di traduzione nativo di Blender. I colori mostrati sono esempi, non preset inclusi.
+Le schermate precedono la v0.5; posizione del workspace e comandi di sessione sono cambiati.
 
 **Controlli del tema** — Regola i colori correlati dell’interfaccia e l’arrotondamento dei controlli.
 
@@ -54,26 +76,29 @@ Queste schermate autentiche mostrano Theme Studio con l’interfaccia italiana d
 
 ## Installazione
 
-1. Scarica [`theme_studio-0.4.0.zip`](https://github.com/charliepvc/blender-theme-studio/releases/download/v0.4.0/theme_studio-0.4.0.zip). Non usare l’archivio dei sorgenti generato automaticamente da GitHub.
+1. Scarica [`theme_studio-0.5.0.zip`](https://github.com/charliepvc/blender-theme-studio/releases/download/v0.5.0/theme_studio-0.5.0.zip). Non usare l’archivio dei sorgenti generato automaticamente da GitHub.
 2. In Blender, apri **Edit → Preferences → Add-ons** e scegli **Install from Disk**.
 3. Seleziona lo ZIP scaricato e attiva **Theme Studio** nell’elenco degli addon.
 4. Nella Vista 3D, premi **N** per aprire la barra laterale. Scegli **Theme Studio**, poi **Start editing** (**Inizia a modificare**).
 
-Theme Studio si trova nella barra laterale della Vista 3D. Le sue pagine sono **Theme** (**Tema**), **3D View** (**Vista 3D**) e **Details** (**Dettagli**). La lingua predefinita è l’inglese. Per usare la traduzione italiana fornita, seleziona l’italiano e attiva la traduzione **Interface** nelle preferenze di Blender; la traduzione dei tooltip segue un’impostazione separata.
+Ibrida è predefinita: i controlli comuni appaiono nella barra laterale della Vista 3D; **Area di lavoro completa** apre **Preferenze > Temi** con le pagine **Tema**, **Vista 3D** e **Dettagli**. Scegli un’altra **Area di lavoro** in **Preferenze > Add-on > Theme Studio**. La lingua predefinita è l’inglese. Per usare l’italiano, selezionalo e attiva la traduzione **Interface**; i tooltip seguono l’impostazione separata.
 
 ## Compatibilità
 
 | Versione di Blender | Stato |
 | --- | --- |
 | **5.2.1 LTS** | Build di riferimento; verificati installazione dello ZIP localizzato e flussi di lavoro principali. |
-| **5.3.x** | Famiglia di sviluppo. Le verifiche precedenti riguardavano specifiche build Beta; questa versione localizzata non è stata verificata nuovamente su 5.3. |
+| **5.3.x** | Famiglia di sviluppo sperimentale; v0.5.0 non verificata sulla 5.3. |
 | **Altre versioni** | Non verificate. Il fallback del catalogo basato sulla versione di Blender non dimostra la compatibilità. |
+
+La v0.5 è stata verificata sulla 5.2.1 LTS `9e2066aef7ef`. Le prove non certificano
+ogni contesto visivo o il recupero dopo crash reali; le note di rilascio precisano i limiti.
 
 ## Importante: come funzionano le modifiche al tema
 
 - **Le modifiche sono globali.** Gli altri editor di Blender mostrano il tema modificato durante la sessione.
 - **Nascondere la barra laterale N non termina la sessione.** Termina o scarta la sessione prima di chiudere Blender.
-- **Scarta e Termina hanno effetti diversi.** **Discard changes…** (**Scarta le modifiche…**) tenta di ripristinare i campi gestiti dalla sessione e segnala i conflitti; le modifiche esterne rilevate vengono conservate. **Finish…** (**Termina…**) permette di mantenere il tema live, salvandolo esplicitamente oppure no.
+- **Termina controlla l’esito della sessione.** **Termina…** presenta salva e termina come azione principale; espandi le alternative per mantenere senza salvare oppure scartare. Scarta tenta di ripristinare i campi gestiti dalla sessione e conserva le modifiche esterne rilevate.
 - **Theme Studio non salva automaticamente le preferenze di Blender.** **Save all preferences…** (**Salva tutte le preferenze…**) salva tutte le preferenze di Blender, non solo il tema. Durante un’anteprima temporanea, evita il salvataggio manuale delle preferenze.
 - **Mantenere il tema senza salvarlo non lo rende permanente.** Se attivo, il salvataggio automatico di Blender potrebbe salvare il tema live in seguito. I dati di recupero possono aiutare dopo un’interruzione, ma non garantiscono il recupero. Per i lavori importanti, conserva una copia separata del tema.
 
@@ -97,7 +122,7 @@ Il builder di questo repository crea uno ZIP locale per addon legacy, non una Bl
 
 ```bash
 python -c "from pathlib import Path; Path('dist').mkdir(exist_ok=True)"
-python tools/build_dev_addon.py --output dist/theme_studio-0.4.0.zip
+python tools/build_dev_addon.py --output dist/theme_studio-0.5.0-dev.zip
 ```
 
 ## Licenza

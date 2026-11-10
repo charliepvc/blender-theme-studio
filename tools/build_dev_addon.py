@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 
-REQUIRED_FILES = ("__init__.py", "blender_backend.py", "catalog.json", "catalog-5.2.1.json", "contrast.py", "core.py", "labels.py", "palette.py", "preferences.py", "translations.py", "ui.py")
+REQUIRED_FILES = ("__init__.py", "blender_backend.py", "catalog.json", "catalog-5.2.1.json", "contrast.py", "core.py", "labels.py", "native_theme_files.py", "native_themes.py", "palette.py", "picking.py", "preferences.py", "translations.py", "ui.py")
 
 
 def build_archive(source, output):

@@ -682,32 +682,31 @@ class Draft:
         self.set(path, value[:3] + [alpha])
 
     def apply_palette(self, key, paths, anchor, rgb):
-        from .palette import palette_group, transform_color
+        from .palette import coordinated_palette_updates, palette_group, palette_groups
         group = palette_group(self.registry, key)
         paths = tuple(paths)
         if group is None or paths != group["paths"] or anchor != group["anchor"]:
             raise ValidationError("Invalid palette group, paths or anchor")
         rgb = _validate_rgb(rgb)
-        updates = {}
-        for path in paths:
-            spec = self.registry.fields.get(path)
-            if spec is None or spec.subtype not in {"COLOR", "COLOR_GAMMA"} or spec.length not in {3, 4}:
-                raise ValidationError(f"Not a palette color field: {path}")
-            transformed = (copy.deepcopy(self._baseline[path])
-                           if tuple(rgb) == tuple(self._baseline[anchor][:3])
-                           else transform_color(self._baseline[path], self._baseline[anchor], rgb))
-            if spec.length == 4:
-                transformed[3] = self._values[path][3]
-            updates[path] = spec.validate(transformed)
+        intents = {group["id"]: tuple(
+            self._palette_rgb[group["id"]][1] if group["id"] in self._palette_rgb
+            else self._baseline[group["anchor"]][:3])
+            for group in palette_groups(self.registry)[:7]
+            if group["anchor"] in self._baseline}
+        intents[key] = rgb
+        updates = coordinated_palette_updates(
+            self.registry, self._baseline, self._values, self._protected, intents, key)
+        updates = self.registry.validate(updates)
         before = None if self._transaction_depth else self._snapshot()
-        changed = tuple(path for path in paths
-                        if path not in self._protected and updates[path] != self._values[path])
-        for path in paths:
+        changed = tuple(path for path, value in updates.items()
+                        if path not in self._protected and value != self._values[path])
+        affected_protected = tuple(path for path in updates if path in self._protected)
+        for path, value in updates.items():
             if path not in self._protected:
-                self._values[path] = updates[path]
+                self._values[path] = value
         self._palette_rgb[key] = (paths, rgb, anchor)
         self._record(before)
-        return ChangeReport(changed, tuple(path for path in paths if path in self._protected))
+        return ChangeReport(changed, affected_protected)
 
     def apply_alpha(self, recipe, alpha):
         """Change only RGBA opacity, atomically; never invent alpha for RGB."""

@@ -27,7 +27,9 @@ from bpy_extras.io_utils import ExportHelper, ImportHelper
 from .blender_backend import BlenderBackend
 from .core import ApplyError, ConflictError, Draft, MAX_DOCUMENT_BYTES, Profile, Session, ValidationError, _reject_constant, _unique_object, archive_recovery, classify_recovery, execute_recovery, is_archived_recovery, load_catalog, load_profile, parse_recovery, plan_recovery, read_document, save_profile
 from .preferences import verify_saved_preferences
+from . import native_themes
 from .palette import detail_categories, palette_groups, roundness_paths, viewport_background_paths
+from .picking import resolve_target
 from .labels import field_label
 from .contrast import analyze_contrast
 from .translations import iface, tip, CONTEXT
@@ -46,6 +48,9 @@ _color_timer_registered = False
 _color_pending_failed = False
 _LIVE_UPDATE_SECONDS = 0.1
 _registered_classes = []
+_ui_hooks_registered = False
+_ui_hooks = []
+_picker_generation = 0
 _journal_path = ""
 _message = ""
 _severity = "INFO"
@@ -55,6 +60,11 @@ _comparing = False
 _completion = "Current theme"
 _file_notice = ""
 _save_pending = False
+_session_theme_path = ""
+_theme_source_origin = None
+_native_theme_library_associations = {}
+_theme_result = None
+_theme_identity_unknown = False
 _failed_action = ""
 _start_failed = False
 _palette_map = ()
@@ -79,6 +89,8 @@ _recovery_progress = ""
 _recovery_blocked = False
 _recovery_records = ()
 _recovery_filenames = ()
+_native_save_plans = {}
+_native_enum_item_refs = {}
 
 
 _OWNER_NAMES = {
@@ -165,6 +177,38 @@ def _owner_label(path):
     return _OWNER_NAMES.get(key, key.replace("_", " ").title())
 
 
+def _picker_paths(registry, kind, editor_id):
+    paths = []
+    for path, spec in registry.fields.items():
+        if not spec.editable:
+            continue
+        parts = _short_path(path).split(".")
+        owner = parts[1] if parts[0] == "user_interface" and len(parts) > 1 else parts[0]
+        if (kind == "controls" and parts[0] == "user_interface") or (kind == "editor" and owner == editor_id):
+            paths.append(path)
+    return tuple(paths)
+
+
+def _set_picker_target(state, registry, target):
+    paths = _picker_paths(registry, target["kind"], target["editor_id"])
+    if not paths:
+        return False
+    categories = {registry.fields[path].group.split(".", 1)[0] for path in paths}
+    color_categories = {registry.fields[path].group.split(".", 1)[0] for path in paths
+                        if registry.fields[path].subtype in {"COLOR", "COLOR_GAMMA"}}
+    preferred = next((category for category in ("surfaces", "states", "text")
+                      if category in color_categories), None)
+    state.picker_active = True
+    state.picker_kind = target["kind"]
+    state.picker_editor_id = target["editor_id"]
+    state.picker_label = target["label"]
+    state.palette_focus = ""
+    state.detail_category = preferred or next(item[0] for item in _detail_items if item[0] in categories)
+    state.show_details = True
+    state.workspace_page = "details"
+    return True
+
+
 def _owner_display_label(path):
     return _owner_display_name(_owner_label(path))
 
@@ -191,6 +235,8 @@ def _apply_live_edit(message):
     draft = session.draft
     snapshot = copy.deepcopy(draft)
     try:
+        if session._auto_save_owned and session.backend.get_auto_save():
+            raise RuntimeError(iface("Save on Exit changed during preview. Discard or resolve the setting before editing."))
         report = session.preview()
     except Exception:
         if not session.faulted:
@@ -535,6 +581,23 @@ def _require_session(*, allow_faulted=False):
     return session
 
 
+def _stage_new_copy_text_shadows(draft):
+    paths = (
+        "preferences.ui_styles[0].widget.shadow",
+        "preferences.ui_styles[0].panel_title.shadow",
+        "preferences.ui_styles[0].tooltip.shadow",
+    )
+    changed = []
+    with draft.transaction():
+        for path in paths:
+            if path not in draft.registry.editable_paths or draft.value(path) == 0:
+                continue
+            draft.set(path, 0)
+            draft.protect(path, False)
+            changed.append(path)
+    return tuple(changed)
+
+
 def _close_session(action):
     global _session, _completion, _preview_values, _comparing
     session = _require_session(allow_faulted=action == "cancel")
@@ -547,9 +610,13 @@ def _close_session(action):
     if not session.active:
         _session = None
         _preview_values, _comparing = None, False
-    _completion = "Current theme" if action == "cancel" else "Theme kept"
-    message = ("Changes discarded." if action == "cancel" else
-               "Theme kept. Theme Studio did not save preferences. If Blender auto-save is enabled, the theme may be saved later.")
+        _clear_native_save_plans()
+        if _theme_result and _theme_result["kind"] == "export":
+            _theme_result["session_open"] = False
+    _completion = "Session ended"
+    message = "Changes discarded." if action == "cancel" else "Theme kept. Theme Studio did not save preferences."
+    if action != "cancel" and session.backend.get_auto_save():
+        message += " Blender auto-save may save preferences later."
     _report(message, report, count=action != "confirm")
     return report
 
@@ -568,6 +635,12 @@ def _cancel_for_lifecycle(reason):
 
 @persistent
 def _load_pre(_filename):
+    global _picker_generation
+    _picker_generation += 1
+    try:
+        bpy.context.window_manager.theme_studio_ui.picker_active = False
+    except (AttributeError, RuntimeError):
+        pass
     # Blender may continue loading after a handler error. The persistent handler
     # and module reference keep the failed session reachable for another cancel.
     _cancel_for_lifecycle(iface("File change"))
@@ -576,8 +649,12 @@ def _load_pre(_filename):
 def _detail_category_items(_self, _context):
     global _detail_category_display
     counts = {item["id"]: len(item["paths"]) for item in _detail_map}
+    if getattr(_self, "picker_active", False):
+        paths = _picker_paths(get_registry(), _self.picker_kind, _self.picker_editor_id)
+        counts = {identifier: sum(get_registry().fields[path].group.split(".", 1)[0] == identifier
+                                  for path in paths) for identifier, _label, _description in _detail_items}
     _detail_category_display = tuple((identifier, iface(label), tip("{count} controls").format(count=counts[identifier]))
-                                     for identifier, label, _description in _detail_items)
+                                     for identifier, label, _description in _detail_items if counts[identifier])
     return _detail_category_display
 
 
@@ -593,6 +670,10 @@ def _paths_in_context(paths, selected, owner_label):
 
 
 def _detail_paths(state):
+    if getattr(state, "picker_active", False):
+        paths = _picker_paths(get_registry(), state.picker_kind, state.picker_editor_id)
+        return tuple(path for path in paths
+                     if get_registry().fields[path].group.split(".", 1)[0] == state.detail_category)
     if state.palette_focus:
         if state.palette_focus == "viewport" and _viewport_group:
             return tuple(path for group in _viewport_group["groups"] for path in group["paths"]) + _viewport_group["details"]
@@ -879,10 +960,13 @@ def session_status():
     if session.faulted:
         return iface("Restore incomplete")
     if _comparing:
-        return iface("Comparison: initial theme")
+        return iface("Comparing with starting theme")
+    changed = _theme_changed(session)
+    status = ("Editing · theme changes not saved" if changed else
+              "Editing · no theme changes")
     if _has_pending_edits(session):
-        return iface("Live theme not saved · changes pending") if _theme_changed(session) else iface("Changes pending")
-    return iface("Live theme not saved") if _theme_changed(session) else iface("No changes")
+        return iface(status + " · changes pending")
+    return iface(status)
 
 
 def _visible_theme(session):
@@ -894,6 +978,164 @@ def _visible_theme(session):
     return iface("Initial theme") if _comparing else iface("Live theme")
 
 
+def _capture_theme_origin(context):
+    origin = {"path": "", "name": None, "user_owned": False,
+              "source_bytes": None, "library_path": "", "library_target": ""}
+    try:
+        filepath = getattr(context.preferences.themes[0], "filepath", "")
+    except Exception:
+        return origin
+    if not filepath:
+        return origin
+    try:
+        path = native_themes._canonical(Path(filepath))
+        preset = next(((name, native_themes._canonical(Path(candidate)), owned)
+                       for name, candidate, owned in native_themes.native_theme_presets()
+                       if native_themes._canonical(Path(candidate)) == path), None)
+        if preset is None:
+            return origin
+        name, path, user_owned = preset
+        origin.update(path=str(path), name=name, user_owned=user_owned)
+        if not user_owned:
+            return origin
+        native_themes.validate_native_preset(str(path))
+        data = path.read_bytes()
+        native_themes.validate_native_preset(str(path))
+        if path.read_bytes() != data:
+            return origin
+        origin["source_bytes"] = data
+        association = _native_theme_library_associations.get(str(path))
+        if association and association["source_bytes"] == data:
+            library = native_themes._canonical(Path(association["library_path"]))
+            target = native_themes._canonical(Path(association["library_target"]))
+            configured = any(native_themes._canonical(Path(candidate)) == library
+                             for _name, candidate in native_themes.configured_libraries(context))
+            if (configured and target.parent == native_themes._canonical(library / "themes")
+                    and target.read_bytes() == data):
+                origin.update(library_path=str(library), library_target=str(target))
+    except Exception:
+        return origin
+    return origin
+
+
+def _verify_theme_source_library(context, origin, library_path, *, external=False):
+    if (external or _theme_identity_unknown or not origin or not origin.get("user_owned")
+            or not origin.get("name") or not origin.get("source_bytes")):
+        return None
+    try:
+        source = native_themes._canonical(Path(origin["path"]))
+        discovered = next(((native_themes._canonical(Path(path)), owned)
+                           for _name, path, owned in native_themes.native_theme_presets()
+                           if native_themes._canonical(Path(path)) == source), None)
+        if discovered != (source, True):
+            return None
+        native_themes.validate_native_preset(str(source))
+        source_bytes = source.read_bytes()
+        native_themes.validate_native_preset(str(source))
+        if source_bytes != origin["source_bytes"] or source.read_bytes() != source_bytes:
+            return None
+        selected = next((path for _name, path in native_themes.configured_libraries(context)
+                         if native_themes._canonical(Path(path)) == native_themes._canonical(Path(library_path))), None)
+        if selected is None:
+            return None
+        plan = native_themes.plan_native_theme(context, origin["name"], selected)
+        target = native_themes._canonical(Path(plan["paths"][0]))
+        library_themes = native_themes._canonical(Path(selected) / "themes")
+        if target.parent != library_themes or plan["expected"].get(target) != source_bytes:
+            return None
+        return {"library_path": str(native_themes._canonical(Path(selected))),
+                "library_target": str(target), "source_path": str(source),
+                "source_bytes": source_bytes, "normalized_name": plan["stem"]}
+    except Exception:
+        return None
+
+
+def _remember_native_theme_library_association(context, paths, library_path):
+    try:
+        library = native_themes._canonical(Path(_selected_native_library(context, library_path)))
+        target = native_themes._canonical(Path(paths[0]))
+        source = native_themes._canonical(Path(paths[-1]))
+        if target.parent != native_themes._canonical(library / "themes"):
+            return
+        discovered = next(((native_themes._canonical(Path(path)), owned)
+                           for _name, path, owned in native_themes.native_theme_presets()
+                           if native_themes._canonical(Path(path)) == source), None)
+        if discovered != (source, True):
+            return
+        native_themes.validate_native_preset(str(source))
+        source_bytes = source.read_bytes()
+        if target.read_bytes() != source_bytes or source.read_bytes() != source_bytes:
+            return
+        _native_theme_library_associations[str(source)] = {
+            "library_path": str(library), "library_target": str(target),
+            "source_bytes": source_bytes,
+        }
+    except Exception:
+        return
+
+
+def _theme_identity(context, session=None):
+    """Return known preset provenance, never a claim that file matches appearance."""
+    filepath = (_session_theme_path if session is not None else
+                getattr(context.preferences.themes[0], "filepath", ""))
+    try:
+        path = native_themes._canonical(Path(filepath)) if filepath else None
+        known_path = path is not None and path.is_file() and path.suffix.casefold() == ".xml"
+    except (OSError, RuntimeError, ValueError):
+        path = None
+        known_path = False
+    origin = _theme_source_origin
+    known_origin = bool(origin and known_path and origin["path"] == str(path) and origin["name"])
+    external = (session is not None and not session.faulted and _visible_theme(session) ==
+                iface("External changes detected; visible theme may differ"))
+    unknown = _theme_identity_unknown
+    return {"name": origin["name"] if known_origin and not external and not unknown else None,
+            "path": str(path) if known_path and not external and not unknown else None,
+            "external": external, "unknown": unknown,
+            "source_origin": origin if known_origin else None}
+
+
+def _draw_identity_status(layout, context, state, session):
+    identity = _theme_identity(context, session)
+    if identity["external"]:
+        origin = identity["source_origin"]
+        if origin and origin["name"]:
+            _wrapped(layout, iface("Theme at start of editing: {name}").format(name=origin["name"]))
+        _wrapped(layout, "External changes detected · visible theme may differ")
+    elif identity["unknown"]:
+        _wrapped(layout, "Theme identity unknown")
+    elif identity["name"]:
+        label = "Theme at start of editing" if session is not None else "Preset reported by Blender"
+        _wrapped(layout, iface("{label}: {name}").format(
+            label=iface(label), name=identity["name"]))
+    else:
+        _wrapped(layout, "Theme active in Blender; preset name unknown")
+    layout.label(text=session_status(), icon="INFO", text_ctxt=CONTEXT)
+    if _theme_result:
+        if _theme_result["kind"] == "save":
+            label = "Previously saved copy" if identity["external"] else "Saved copy"
+            _wrapped(layout, iface("{label}: {name}").format(
+                label=iface(label), name=_theme_result["name"]))
+            if _theme_result["session_open"]:
+                _wrapped(layout, "Theme files were saved, but the editing session remains open.")
+            elif _completion == "Preferences saved":
+                _wrapped(layout, "Session ended. Blender preferences were saved.")
+            else:
+                _wrapped(layout, "Session ended. Blender preferences were not saved.")
+        elif _theme_result["kind"] == "export":
+            message = ("Theme copy exported. Editing session remains open." if
+                       _theme_result["session_open"] else "Theme copy exported earlier.")
+            _wrapped(layout, iface(message))
+
+
+def _reset_theme_status():
+    global _session_theme_path, _theme_source_origin, _theme_result, _theme_identity_unknown
+    _session_theme_path = ""
+    _theme_source_origin = None
+    _theme_result = None
+    _theme_identity_unknown = False
+
+
 def _get_included(self):
     session = get_session()
     return session is not None and self.path in get_registry().editable_paths and self.path not in session.draft.protected
@@ -902,6 +1144,8 @@ def _get_included(self):
 def _set_included(self, value):
     try:
         session = _require_session()
+        if not _flush_colors(session):
+            raise RuntimeError(iface("Pending changes: resolve conflict before continuing."))
         _restore_draft(session)
         old_draft = copy.deepcopy(session.draft)
         session.draft.protect(self.path, not value)
@@ -935,9 +1179,13 @@ class THEME_STUDIO_PG_state(bpy.types.PropertyGroup):
     detail_fields: CollectionProperty(type=THEME_STUDIO_PG_target, translation_context=CONTEXT, options={"SKIP_SAVE"})
     detail_index: IntProperty(translation_context=CONTEXT, min=0, options={"SKIP_SAVE"})
     palette_focus: StringProperty(translation_context=CONTEXT, options={"SKIP_SAVE"})
+    picker_active: BoolProperty(translation_context=CONTEXT, options={"SKIP_SAVE"})
+    picker_kind: StringProperty(translation_context=CONTEXT, options={"SKIP_SAVE"})
+    picker_editor_id: StringProperty(translation_context=CONTEXT, options={"SKIP_SAVE"})
+    picker_label: StringProperty(translation_context=CONTEXT, options={"SKIP_SAVE"})
     issue_page: IntProperty(translation_context=CONTEXT, default=0, min=0, options={"SKIP_SAVE"})
     contrast_page: IntProperty(translation_context=CONTEXT, default=0, min=0, options={"SKIP_SAVE"})
-    profile_name: StringProperty(name="Theme Name", translation_context=CONTEXT, default="My Theme", maxlen=80, options={"SKIP_SAVE"})
+    profile_name: StringProperty(name="JSON Project Name", translation_context=CONTEXT, default="My Theme", maxlen=80, options={"SKIP_SAVE"})
     show_issue_details: BoolProperty(name="Result Details", translation_context=CONTEXT, options={"SKIP_SAVE"})
     contrast_details: BoolProperty(name="Contrast Details", translation_context=CONTEXT, options={"SKIP_SAVE"})
     show_safety_details: BoolProperty(name="Editing Details", translation_context=CONTEXT, options={"SKIP_SAVE"})
@@ -945,6 +1193,8 @@ class THEME_STUDIO_PG_state(bpy.types.PropertyGroup):
 
 
 class _SessionAction:
+    _operator_id = ""
+
     @classmethod
     def poll(cls, _context):
         session = get_session()
@@ -953,6 +1203,10 @@ class _SessionAction:
     def execute(self, context):
         global _failed_action
         try:
+            session = get_session()
+            if (session is not None and session._auto_save_owned and session.backend.get_auto_save()
+                    and self._operator_id not in {"theme_studio.cancel", "theme_studio.finish"}):
+                raise RuntimeError(iface("Save on Exit changed during preview. Discard or resolve the setting before editing."))
             if getattr(self, "_discard_pending_colors", False):
                 _discard_colors()
             elif not _flush_colors():
@@ -973,7 +1227,7 @@ class THEME_STUDIO_OT_start(_SessionAction, bpy.types.Operator):
     bl_translation_context = "Theme Studio"
     bl_idname = "theme_studio.start"
     bl_label = "Start editing"
-    bl_description = "Start a reversible session. The theme does not change until you edit a field."
+    bl_description = "Create a reversible copy with text shadows disabled. Other theme values stay unchanged."
 
     def execute(self, context):
         global _start_failed
@@ -983,7 +1237,10 @@ class THEME_STUDIO_OT_start(_SessionAction, bpy.types.Operator):
             return {"FINISHED"}
         except Exception as exc:
             _start_failed = True
-            _notice("Could not create the initial copy. The theme was not changed.", "ERROR", (str(exc),))
+            message = ("Could not create the initial copy. Restore remains available in Theme Studio."
+                       if get_session() is not None else
+                       "Could not create the initial copy. The theme was not changed.")
+            _notice(message, "ERROR", (str(exc),))
             traceback.print_exc()
             self.report({"ERROR"}, _message_text(_message))
             return {"CANCELLED"}
@@ -994,6 +1251,7 @@ class THEME_STUDIO_OT_start(_SessionAction, bpy.types.Operator):
 
     def run(self, context):
         global _session, _journal_path, _preview_values, _comparing, _completion, _file_notice, _save_pending
+        global _session_theme_path, _theme_source_origin
         registry = get_registry()
         backend = BlenderBackend(registry)
         if _storage_override is not None:
@@ -1005,20 +1263,34 @@ class THEME_STUDIO_OT_start(_SessionAction, bpy.types.Operator):
                 raise OSError("User storage is unavailable; no session was started")
             directory = Path(directory_name)
         journal = directory / f"recovery-{uuid.uuid4().hex}.json"
+        _reset_theme_status()
+        _theme_source_origin = _capture_theme_origin(context)
         session = Session(registry, backend, journal)
         _session = session
+        _session_theme_path = _theme_source_origin["path"] or getattr(
+            context.preferences.themes[0], "filepath", "")
         _preview_values, _comparing = {p: copy.deepcopy(v) for p, v in _session.initial.items()
                                       if p in registry.editable_paths}, False
         _completion, _file_notice, _save_pending = "Current theme", "", False
         _journal_path = str(journal)
+        try:
+            if _stage_new_copy_text_shadows(session.draft):
+                session.preview()
+                _preview_values = {p: copy.deepcopy(backend.read(p)) for p in registry.editable_paths}
+        except Exception:
+            try:
+                _close_session("cancel")
+            except Exception as rollback_error:
+                raise RuntimeError("Text-shadow defaults failed and initial-copy restore needs recovery") from rollback_error
+            raise
         state = context.window_manager.theme_studio_ui
-        state.show_details = False
         state.palette_focus = ""
-        state.workspace_page = "theme"
-        if _detail_items:
+        state.show_details = state.picker_active
+        state.workspace_page = "details" if state.picker_active else "theme"
+        if _detail_items and not state.picker_active:
             state.detail_category = _detail_items[0][0]
         _detail_changed(state, context)
-        _notice("")  # The persistent state already says that nothing has changed.
+        _notice("")  # The persistent state reports the new copy's text-shadow changes.
 
 
 class THEME_STUDIO_OT_preview(_SessionAction, bpy.types.Operator):
@@ -1081,6 +1353,7 @@ class THEME_STUDIO_OT_previous(_SessionAction, bpy.types.Operator):
 
 class THEME_STUDIO_OT_cancel(_SessionAction, bpy.types.Operator):
     bl_translation_context = "Theme Studio"
+    _operator_id = "theme_studio.cancel"
     bl_idname = "theme_studio.cancel"
     bl_label = "Discard changes…"
     bl_description = "Restore the initial theme, preserve external changes, and close work. Retry after errors."
@@ -1091,6 +1364,9 @@ class THEME_STUDIO_OT_cancel(_SessionAction, bpy.types.Operator):
         return get_session() is not None
 
     def invoke(self, context, _event):
+        session = get_session()
+        if session and (session.faulted or not _theme_changed_or_pending(session)):
+            return self.execute(context)
         return context.window_manager.invoke_props_dialog(self, width=440)
 
     def draw(self, _context):
@@ -1120,15 +1396,188 @@ class THEME_STUDIO_OT_confirm(_SessionAction, bpy.types.Operator):
         _close_session("confirm")
 
 
+def _native_library_choice_items(self, _context):
+    options = json.loads(self.library_options or "[]")
+    items = [("NONE", iface("Choose an existing library"), "")] + [
+        (str(index + 1), name, "") for index, (name, _path) in enumerate(options)]
+    return _retain_native_enum_items(("library", self.library_options), items)
+
+
+def _finish_library_path(operator):
+    try:
+        libraries = json.loads(operator.library_options or "[]")
+        index = int(operator.library_choice) - 1
+    except (TypeError, ValueError):
+        return ""
+    return libraries[index][1] if 0 <= index < len(libraries) else ""
+
+
+def _finish_native_stem(name):
+    return native_themes._normalized(name, native_themes._blender_modules())
+
+
+def _validate_finish_source(origin):
+    if not origin or not origin.get("path"):
+        return
+    try:
+        source = native_themes._canonical(Path(origin["path"]))
+        preset = next(((name, native_themes._canonical(Path(path)), owned)
+                       for name, path, owned in native_themes.native_theme_presets()
+                       if native_themes._canonical(Path(path)) == source), None)
+        if preset != (origin["name"], source, origin["user_owned"]):
+            raise ValueError("Native theme source changed")
+        source_bytes = origin.get("source_bytes")
+        if source_bytes is None:
+            return
+        if not origin["user_owned"]:
+            raise ValueError("Native theme source is not user-owned")
+        native_themes.validate_native_preset(str(source))
+        current = source.read_bytes()
+        native_themes.validate_native_preset(str(source))
+        if current != source_bytes or source.read_bytes() != current:
+            raise ValueError("Native theme source bytes changed")
+    except Exception as exc:
+        raise RuntimeError(iface("The starting theme changed or is no longer available. Reopen it before saving.")) from exc
+
+
+def _validate_finish_save(context, name, save_mode, library_path, *, verified_target="",
+                          expected_origin=None, expected_session=None):
+    session = _require_session()
+    if expected_session is not None and session is not expected_session:
+        raise RuntimeError(iface("The editing session changed. Reopen Finish before saving."))
+    if _comparing:
+        raise RuntimeError(iface("Return to live theme before saving."))
+    origin = _theme_source_origin
+    if expected_origin is not None and origin != expected_origin:
+        raise RuntimeError(iface("The starting theme identity changed. Reopen Finish before saving."))
+    library_path = _selected_native_library(context, library_path)
+    normalized_name = _finish_native_stem(name)
+    external = _theme_identity(context, session)["external"]
+    update_target = ""
+    if save_mode == "UPDATE":
+        if _theme_identity_unknown:
+            raise RuntimeError(iface("The starting theme cannot be verified for an update."))
+        _validate_finish_source(origin)
+        if external or not origin or not origin.get("user_owned") or not origin.get("source_bytes"):
+            raise RuntimeError(iface("This theme cannot be updated safely. Save as new instead."))
+        association = _verify_theme_source_library(context, origin, library_path, external=external)
+        if not association or association["library_target"] != verified_target:
+            raise RuntimeError(iface("The update destination changed. Choose the library again."))
+        if normalized_name.casefold() != association["normalized_name"].casefold():
+            raise RuntimeError(iface("Updating keeps the original theme name."))
+        update_target = association["library_target"]
+    elif save_mode == "NEW":
+        if origin and origin.get("name") and normalized_name.casefold() == _finish_native_stem(
+                origin["name"]).casefold():
+            raise RuntimeError(iface("Choose a different name to save as new."))
+    else:
+        raise RuntimeError(iface("Choose Update existing theme or Save as new."))
+    return {"save_mode": save_mode, "name": name, "normalized_name": normalized_name,
+            "library_path": library_path, "update_target": update_target,
+            "source_origin": dict(origin) if origin else None, "session": session}
+
+
+def _validate_finish_save_request(context, request):
+    if get_session() is not request["session"]:
+        raise RuntimeError(iface("The editing session changed. Reopen Finish before saving."))
+    if _theme_source_origin != request["source_origin"]:
+        raise RuntimeError(iface("The starting theme origin changed. Reopen Finish before saving."))
+    return _validate_finish_save(
+        context, request["name"], request["save_mode"], request["library_path"],
+        verified_target=request["update_target"], expected_origin=request["source_origin"],
+        expected_session=request["session"])
+
+
+def _finish_save_mode_items(self, _context):
+    items = [("NEW", iface("Save as new"), iface("Save a separate theme copy"), 2)]
+    if self.update_available:
+        items.insert(0, ("UPDATE", iface("Update existing theme"),
+                         iface("Replace the verified original theme files after consent"), 1))
+    return _retain_native_enum_items(("finish_mode", self.library_options,
+                                      self.library_choice, self.verified_update_target,
+                                      self.update_available), items)
+
+
+def _finish_mode_changed(self, _context):
+    if self.save_mode == "UPDATE":
+        if not self.update_available:
+            self.save_mode = "NEW"
+        elif _theme_source_origin and _theme_source_origin.get("name"):
+            self.name = _theme_source_origin["name"]
+
+
+def _finish_library_changed(self, context):
+    save_mode = self.save_mode
+    self.update_available = False
+    self.verified_update_target = ""
+    session = get_session()
+    library_path = _finish_library_path(self)
+    if session and library_path and _theme_source_origin:
+        external = _theme_identity(context, session)["external"]
+        association = _verify_theme_source_library(context, _theme_source_origin, library_path,
+                                                   external=external)
+        if association:
+            self.update_available = True
+            self.verified_update_target = association["library_target"]
+    if save_mode == "UPDATE" and not self.update_available:
+        self.save_mode = "NEW"
+        source_name = _theme_source_origin.get("name") if _theme_source_origin else ""
+        if source_name and _finish_native_stem(self.name).casefold() == _finish_native_stem(source_name).casefold():
+            self.name = source_name + " Copy"
+
+
 class THEME_STUDIO_OT_finish(_SessionAction, bpy.types.Operator):
     bl_translation_context = "Theme Studio"
+    _operator_id = "theme_studio.finish"
     bl_idname = "theme_studio.finish"
     bl_label = "Finish…"
+    action: EnumProperty(translation_context=CONTEXT, items=(
+        ("SAVE", "", "Save the selected theme and finish editing"),
+        ("KEEP", "", "Keep the live theme and finish without saving"),
+        ("RETURN_LIVE", "", "Return to live theme without ending the session"),
+    ), default="SAVE", options={"SKIP_SAVE"})
+    name: StringProperty(name="Theme Name", translation_context=CONTEXT, default="", maxlen=80,
+                         options={"SKIP_SAVE"})
+    library_options: StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+    library_choice: EnumProperty(name="Asset Library", translation_context=CONTEXT,
+                                 items=_native_library_choice_items, update=_finish_library_changed,
+                                 options={"SKIP_SAVE"})
+    save_mode: EnumProperty(name="Save mode", translation_context=CONTEXT,
+                            items=_finish_save_mode_items, update=_finish_mode_changed,
+                            options={"SKIP_SAVE"})
+    update_available: BoolProperty(options={"HIDDEN", "SKIP_SAVE"})
+    verified_update_target: StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+    show_other_choices: BoolProperty(default=False, options={"SKIP_SAVE"})
 
     def invoke(self, context, _event):
-        return context.window_manager.invoke_props_dialog(self, width=480, confirm_text=iface("Continue editing"))
+        session = _require_session()
+        unchanged = not _theme_changed_or_pending(session) and not _comparing
+        self.action = "RETURN_LIVE" if _comparing else "KEEP" if unchanged else "SAVE"
+        source_name = (_theme_source_origin["name"] if _theme_source_origin and
+                       _theme_source_origin.get("name") else "")
+        self.name = source_name or context.window_manager.theme_studio_ui.profile_name
+        libraries = native_themes.configured_libraries(context)
+        self.library_options = json.dumps(libraries)
+        self.update_available = False
+        self.verified_update_target = ""
+        self.save_mode = "NEW"
+        self.library_choice = "NONE"
+        associated_library = _theme_source_origin.get("library_path", "") if _theme_source_origin else ""
+        if associated_library:
+            selected = next((str(index + 1) for index, (_name, path) in enumerate(libraries)
+                             if native_themes._canonical(Path(path)) ==
+                             native_themes._canonical(Path(associated_library))), "NONE")
+            if selected != "NONE":
+                self.library_choice = selected
+        if self.update_available:
+            self.save_mode = "UPDATE"
+        elif source_name and _finish_native_stem(self.name).casefold() == _finish_native_stem(source_name).casefold():
+            self.name = source_name + " Copy"
+        confirm_text = ("Return to live theme" if _comparing else
+                        "Close without changes" if unchanged else "Save and finish")
+        return context.window_manager.invoke_props_dialog(self, width=620, confirm_text=iface(confirm_text))
 
-    def draw(self, _context):
+    def draw(self, context):
         layout = self.layout
         layout.operator_context = "EXEC_DEFAULT"
         session = get_session()
@@ -1136,26 +1585,62 @@ class THEME_STUDIO_OT_finish(_SessionAction, bpy.types.Operator):
             layout.label(text=session_status(), icon="CHECKMARK", text_ctxt=CONTEXT)
             _wrapped(layout, "Editing session is closed. You can close this dialog.", width=480)
             return
-        if not _theme_changed_or_pending(session) and not _comparing:
-            layout.label(text=iface("No changes to keep."), icon="INFO", text_ctxt=CONTEXT)
-            _wrapped(layout, "Return to the colors or close the session without saving preferences.", width=480)
-            layout.operator("theme_studio.cancel", text=iface("Close Without Changes"), icon="X")
+        unchanged = not _theme_changed_or_pending(session) and not _comparing
+        if unchanged:
+            layout.label(text=iface("No theme changes to save."), icon="INFO", text_ctxt=CONTEXT)
+            _wrapped(layout, "Close without changes ends this editing session. The theme stays unchanged.", width=620)
             return
         if _comparing:
             _wrapped(layout, "Comparison is active. Return to live changes before finishing.", width=480)
-            layout.operator("theme_studio.previous", text=iface("Return to Live Changes"), icon="LOOP_BACK")
             return
-        layout.label(text=iface("Keep this theme?"), icon="QUESTION", text_ctxt=CONTEXT)
-        _wrapped(layout, "The live theme remains active. Preferences are not saved.", width=480)
-        _wrapped(layout, "Saving preferences writes all Blender preferences.", width=480)
-        op = layout.operator("theme_studio.save_preferences", text=iface("Save all preferences…"), icon="FILE_TICK")
-        op.consent = True
-        layout.separator()
-        layout.operator("theme_studio.confirm", text=iface("Use without saving now"))
-        _wrapped(layout, "The theme stays active. If Blender auto-save is enabled, it may be saved later.", width=480)
+        if self.update_available:
+            layout.prop(self, "save_mode", expand=True)
+        layout.prop(self, "library_choice", text=iface("Save location"))
+        library_path = _finish_library_path(self)
+        if not library_path:
+            _wrapped(layout, "Choose a save location. Selecting the library with the verified original theme enables Update existing.", width=620)
+        elif not self.update_available:
+            _wrapped(layout, "This theme will be saved as a new copy.", width=620)
+            _wrapped(layout, "Choose its original library to enable Update existing, if Theme Studio can verify it.", width=620)
+        if self.save_mode == "UPDATE":
+            layout.label(text=iface("Theme name: {name}").format(name=_theme_source_origin["name"]))
+        else:
+            layout.prop(self, "name")
+        if library_path:
+            _wrapped(layout, "Saving this theme ends editing. Blender preferences are not saved.", width=620)
+        if session.original_auto_save:
+            _wrapped(layout, "Blender auto-save may save preferences later.", width=620)
+
+        disclosure = layout.row(align=True)
+        disclosure.prop(self, "show_other_choices", text=iface("Other finish choices"),
+                        icon="TRIA_DOWN" if self.show_other_choices else "TRIA_RIGHT", emboss=False)
+        if self.show_other_choices:
+            keep = layout.operator("theme_studio.finish", text=iface("Keep live theme and finish without saving"), icon="CHECKMARK")
+            keep.action = "KEEP"
+            if not unchanged:
+                layout.operator_context = "INVOKE_DEFAULT"
+                layout.operator("theme_studio.cancel", text=iface("Restore starting theme and discard changes"), icon="CANCEL")
 
     def run(self, _context):
-        pass  # Dialog confirmation is deliberately the non-destructive exit.
+        session = _require_session()
+        if self.action == "RETURN_LIVE":
+            _restore_draft(session)
+            return
+        if _comparing:
+            raise RuntimeError(iface("Exit comparison before finishing."))
+        if self.action == "KEEP" or not _theme_changed_or_pending(session):
+            _close_session("confirm")
+            return
+        if self.action == "SAVE":
+            library_path = _finish_library_path(self)
+            if not library_path:
+                raise RuntimeError(iface("Select an existing asset library in Theme Studio add-on preferences."))
+            request = _validate_finish_save(
+                _context, self.name, self.save_mode, library_path,
+                verified_target=self.verified_update_target)
+            _begin_native_theme_save(_context, self.name, library_path, finish_request=request)
+        else:
+            raise RuntimeError(iface("Choose a Finish action."))
 
 
 def _save_preferences_verified():
@@ -1375,11 +1860,11 @@ class THEME_STUDIO_OT_copy_report(bpy.types.Operator):
 class THEME_STUDIO_OT_save_profile(_SessionAction, bpy.types.Operator, ExportHelper):
     bl_translation_context = "Theme Studio"
     bl_idname = "theme_studio.save_profile"
-    bl_label = "Save Theme Copy…"
-    bl_description = "Save live theme and excluded items to a .json file without saving preferences"
+    bl_label = "Save Theme Studio Project…"
+    bl_description = "Save this editable project as a JSON file"
     filename_ext = ".json"
     filter_glob: StringProperty(translation_context=CONTEXT, default="*.json", options={"HIDDEN"})
-    profile_name: StringProperty(name="Theme Name", translation_context=CONTEXT, default="My Theme", maxlen=80)
+    profile_name: StringProperty(name="Project Name", translation_context=CONTEXT, default="My Theme", maxlen=80)
     overwrite: BoolProperty(name="Allow File Replacement", translation_context=CONTEXT, default=False,
                             description="Explicit consent. Existing files are not replaced by default.")
 
@@ -1398,7 +1883,7 @@ class THEME_STUDIO_OT_save_profile(_SessionAction, bpy.types.Operator, ExportHel
     def draw(self, _context):
         self.layout.prop(self, "profile_name", text_ctxt=CONTEXT)
         self.layout.prop(self, "overwrite", text_ctxt=CONTEXT)
-        _wrapped(self.layout, "Save the live theme to a .json file without saving Blender preferences.")
+        _wrapped(self.layout, "Save a project file you can edit later. This does not save a Blender theme or end editing.")
 
     def run(self, context):
         global _file_notice
@@ -1420,8 +1905,8 @@ class THEME_STUDIO_OT_save_profile(_SessionAction, bpy.types.Operator, ExportHel
 class THEME_STUDIO_OT_load_profile(_SessionAction, bpy.types.Operator, ImportHelper):
     bl_translation_context = "Theme Studio"
     bl_idname = "theme_studio.load_profile"
-    bl_label = "Open Saved Theme…"
-    bl_description = "Validate the .json file and reversibly apply the theme"
+    bl_label = "Load Theme Studio Project…"
+    bl_description = "Load an editable Theme Studio project"
     filter_glob: StringProperty(translation_context=CONTEXT, default="*.json", options={"HIDDEN"})
     replace_draft: BoolProperty(name="Replace Copy Changes", translation_context=CONTEXT, default=False)
 
@@ -1436,7 +1921,7 @@ class THEME_STUDIO_OT_load_profile(_SessionAction, bpy.types.Operator, ImportHel
 
     def draw(self, _context):
         self.layout.prop(self, "replace_draft")
-        _wrapped(self.layout, "Open the .json file and reversibly update the live theme. Preferences are not saved.")
+        _wrapped(self.layout, "Load a saved project file. Save, discard, or cancel current changes when prompted.")
 
     def run(self, context):
         global _preview_values
@@ -2042,11 +2527,39 @@ class THEME_STUDIO_MT_session(bpy.types.Menu):
         layout.operator_context = "INVOKE_DEFAULT"
         state = context.window_manager.theme_studio_ui
         layout.prop(state, "profile_name")
-        layout.operator("theme_studio.save_profile", icon="FILE_TICK")
-        layout.operator("theme_studio.load_profile", icon="FILE_FOLDER")
+        layout.operator("theme_studio.export_native_xml", text=iface("Export Blender Theme Copy…"), icon="EXPORT")
+        _wrapped(layout, "Export a Blender theme file. Editing stays open.")
+        layout.separator()
+        layout.operator("theme_studio.save_profile", text=iface("Save Theme Studio Project…"), icon="FILE_TICK")
+        _wrapped(layout, "Save a project file to edit later.")
+        layout.operator("theme_studio.load_profile", text=iface("Load Theme Studio Project…"), icon="FILE_FOLDER")
+        _wrapped(layout, "Load a project file. Current changes stay protected by a save, discard, or cancel choice.")
+        layout.operator("theme_studio.load_native_theme", text=iface("Load Blender Theme…"), icon="IMPORT")
         layout.separator()
         layout.operator("theme_studio.safety", icon="INFO")
         layout.operator("theme_studio.cancel", icon="CANCEL")
+
+
+class THEME_STUDIO_MT_theme_selector(bpy.types.Menu):
+    bl_translation_context = CONTEXT
+    bl_label = "Choose a Blender theme"
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.operator_context = "EXEC_DEFAULT"
+        presets = native_themes.native_theme_presets()
+        if not presets:
+            layout.label(text=iface("No Blender theme presets were found."))
+            return
+        for name, filepath, _user_owned in presets:
+            operator = layout.operator("theme_studio.load_native_theme", text=name, icon="COLOR")
+            operator.filepath = filepath
+
+
+def _draw_theme_selector(layout, context, session):
+    identity = _theme_identity(context, session)
+    label = identity["name"] or iface("Choose a Blender theme")
+    layout.menu("THEME_STUDIO_MT_theme_selector", text=label, icon="COLOR")
 
 
 def _draw_inclusion(layout, item, group_id=""):
@@ -2065,6 +2578,498 @@ def session_draft_protected():
     return session.draft.protected if session else frozenset()
 
 
+def _workspace_mode(context=None):
+    context = context or bpy.context
+    addons = getattr(getattr(context, "preferences", None), "addons", None)
+    addon = addons.get(__package__) if addons is not None else None
+    mode = getattr(getattr(addon, "preferences", None), "workspace_mode", "HYBRID")
+    return mode if mode in {"PREFERENCES", "HYBRID", "NPANEL"} else "HYBRID"
+
+
+def _addon_preferences(context):
+    addons = getattr(getattr(context, "preferences", None), "addons", None)
+    addon = addons.get(__package__) if addons is not None else None
+    return getattr(addon, "preferences", None)
+
+
+def _selected_native_library(context, selected_path=None):
+    preferences = _addon_preferences(context)
+    path = selected_path if selected_path is not None else getattr(preferences, "native_library_path", "")
+    if not path:
+        raise RuntimeError(iface("Select an existing asset library in Theme Studio add-on preferences."))
+    if path not in {library_path for _name, library_path in native_themes.configured_libraries(context)}:
+        raise RuntimeError(iface("Selected asset library is unavailable. Choose an existing library again."))
+    return path
+
+
+def _prepare_native_save(context):
+    if _comparing:
+        raise RuntimeError(iface("Return to live theme before saving a native theme."))
+    session = _require_session()
+    if session._auto_save_owned and session.backend.get_auto_save():
+        raise RuntimeError(iface("Save on Exit changed during preview. Resolve it before saving a native theme."))
+    if not _flush_colors(session):
+        raise RuntimeError(iface("Pending changes: resolve conflict before saving."))
+    session.preview()
+    _mark_live(session)
+    return session
+
+
+def _commit_native_theme(context, name, library_path, expected):
+    global _theme_source_origin
+    _prepare_native_save(context)
+    paths = native_themes.save_native_theme(context, name, library_path, expected=expected)
+    _remember_native_theme_library_association(context, paths, library_path)
+    try:
+        _close_session("confirm")
+    except Exception as exc:
+        _notice(("Native theme files were saved to {paths}. Session remains open: {detail}.",
+                 {"paths": ", ".join(map(str, paths)), "detail": str(exc)}), "ERROR", paths)
+        return paths, False
+    _theme_source_origin = _capture_theme_origin(context)
+    return paths, True
+
+
+def _record_native_save_result(name, paths, closed):
+    global _theme_result
+    _theme_result = {"kind": "save", "name": name,
+                     "paths": tuple(map(str, paths)), "session_open": not closed}
+
+
+def _export_native_xml(context, filepath, expected):
+    global _theme_result
+    _prepare_native_save(context)
+    native_themes.export_native_theme(context, filepath, expected=expected)
+    _theme_result = {"kind": "export", "path": str(Path(filepath)), "session_open": True}
+
+
+def _apply_native_theme_preset(context, filepath):
+    global _session_theme_path, _theme_source_origin, _theme_result, _theme_identity_unknown, _completion, _message, _severity, _issues
+    filepath = str(Path(filepath).resolve())
+    discovered = {str(Path(path).resolve()) for _label, path, _user_owned in native_themes.native_theme_presets()}
+    if filepath not in discovered:
+        raise RuntimeError(iface("Choose an existing Blender theme."))
+    native_themes.validate_native_preset(filepath)
+    try:
+        native_themes.apply_native_theme(context, filepath)
+    except Exception:
+        _theme_identity_unknown = True
+        raise
+    _reset_theme_status()
+    _session_theme_path = filepath
+    _theme_source_origin = _capture_theme_origin(context)
+    _completion = "Session ended"
+    _message, _severity, _issues = "", "INFO", ()
+
+
+def _native_preset_choice_items(self, _context):
+    options = json.loads(self.preset_options or "[]")
+    items = [("NONE", iface("Choose a Blender theme"), "")] + [
+        (str(index + 1), label, "") for index, (label, _path, _user_owned) in enumerate(options)]
+    return _retain_native_enum_items(("preset", self.preset_options), items)
+
+
+def _load_selected_native_theme(context, filepath):
+    path = native_themes._canonical(Path(filepath))
+    discovered = {native_themes._canonical(Path(candidate))
+                  for _name, candidate, _owned in native_themes.native_theme_presets()}
+    if path not in discovered:
+        raise RuntimeError(iface("Choose an existing Blender theme."))
+    native_themes.validate_native_preset(str(path))
+    if get_session() is not None:
+        bpy.ops.theme_studio.resolve_native_load("INVOKE_DEFAULT", filepath=str(path))
+    else:
+        _apply_native_theme_preset(context, str(path))
+
+
+def _native_collision_choice_items(self, _context):
+    plan = _native_save_plans.get(self.plan_token, {})
+    choices = [("RENAME", iface("Rename"), iface("Choose a different name or path.")),
+               ("CANCEL", iface("Cancel"), iface("Leave existing files and editing session unchanged."))]
+    if not plan.get("protected"):
+        choices.insert(0, ("OVERWRITE", iface("Overwrite"), iface("Replace only the listed confirmed files.")))
+    return _retain_native_enum_items(("collision", self.plan_token, plan.get("protected")), choices)
+
+
+def _retain_native_enum_items(key, items):
+    retained = tuple(tuple(str(value) for value in item[:3]) + tuple(item[3:]) for item in items)
+    return _native_enum_item_refs.setdefault((key, retained), retained)
+
+
+def _clear_native_save_plans():
+    _native_save_plans.clear()
+
+
+def _cache_native_save_plan(record):
+    record["session"] = get_session()
+    token = uuid.uuid4().hex
+    _native_save_plans[token] = record
+    return token
+
+
+class THEME_STUDIO_AP_preferences(bpy.types.AddonPreferences):
+    bl_idname = __package__
+    workspace_mode: EnumProperty(name="Workspace", translation_context=CONTEXT, items=(
+        ("PREFERENCES", "Preferences > Themes", "Full workspace in Preferences > Themes"),
+        ("HYBRID", "Hybrid", "Common palette in the N-panel; full workspace in Preferences > Themes"),
+        ("NPANEL", "N-panel", "Full workspace in the N-panel only"),
+    ), default="HYBRID")
+    native_library_path: StringProperty(name="Asset Library", translation_context=CONTEXT, default="")
+
+    def draw(self, context):
+        self.layout.prop(self, "workspace_mode")
+        libraries = native_themes.configured_libraries(context)
+        selected = next((name for name, path in libraries if path == self.native_library_path), "")
+        if selected:
+            self.layout.label(text=iface("Selected library: {name}").format(name=selected), icon="ASSET_MANAGER")
+        elif self.native_library_path:
+            self.layout.label(text=iface("Selected asset library is unavailable."), icon="ERROR")
+        else:
+            self.layout.label(text=iface("No asset library selected."), icon="INFO")
+        self.layout.operator("theme_studio.select_native_library", text=iface("Choose Existing Asset Library"), icon="FILE_FOLDER")
+
+
+class THEME_STUDIO_OT_select_native_library(bpy.types.Operator):
+    bl_translation_context = CONTEXT
+    bl_idname = "theme_studio.select_native_library"
+    bl_label = "Choose Existing Asset Library"
+    library_options: StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+    library_choice: EnumProperty(items=_native_library_choice_items, options={"SKIP_SAVE"},
+                                 translation_context=CONTEXT)
+
+    def invoke(self, context, _event):
+        self.library_options = json.dumps(native_themes.configured_libraries(context))
+        if not json.loads(self.library_options):
+            self.report({"WARNING"}, iface("No configured asset libraries are available."))
+            return {"CANCELLED"}
+        self.library_choice = "NONE"
+        return context.window_manager.invoke_props_dialog(self, width=620)
+
+    def draw(self, _context):
+        self.layout.prop(self, "library_choice", text=iface("Asset Library"))
+
+    def execute(self, context):
+        try:
+            if self.library_choice == "NONE":
+                raise ValueError(iface("Choose an existing asset library."))
+            libraries = json.loads(self.library_options)
+            index = int(self.library_choice) - 1
+            if not 0 <= index < len(libraries):
+                raise ValueError(iface("Asset library selection expired. Choose again."))
+            name, path = libraries[index]
+            if (name, path) not in native_themes.configured_libraries(context):
+                raise RuntimeError(iface("Selected asset library changed. Choose an existing library again."))
+            _addon_preferences(context).native_library_path = path
+            return {"FINISHED"}
+        except Exception as exc:
+            self.report({"WARNING"}, str(exc))
+            return {"CANCELLED"}
+
+
+def _begin_native_theme_save(context, name, library_path, resume_native_path="", *, finish_request=None):
+    if not name.strip():
+        raise ValueError(iface("Enter a theme name."))
+    if finish_request is not None:
+        finish_request = _validate_finish_save_request(context, finish_request)
+    library_path = _selected_native_library(context, library_path)
+    _prepare_native_save(context)
+    try:
+        plan = native_themes.plan_native_theme(context, name, library_path)
+        if finish_request is not None and finish_request["save_mode"] == "UPDATE":
+            if (str(native_themes._canonical(Path(plan["paths"][0]))) != finish_request["update_target"]
+                    or plan["expected"].get(native_themes._canonical(Path(finish_request["update_target"])))
+                    != finish_request["source_origin"]["source_bytes"]):
+                raise RuntimeError(iface("The update destination changed. Choose the library again."))
+        record = {"kind": "save", "name": name, "library_path": library_path,
+                  "paths": tuple(plan["paths"]), "expected": dict(plan["expected"]),
+                  "protected": False, "resume_native_path": resume_native_path,
+                  "finish_request": finish_request}
+    except native_themes.ProtectedThemeCollision as exc:
+        record = {"kind": "save", "name": name, "library_path": library_path,
+                  "paths": tuple(exc.paths), "expected": {}, "protected": True,
+                  "resume_native_path": resume_native_path, "finish_request": finish_request}
+    if record["protected"] or any(value is not None for value in record["expected"].values()):
+        token = _cache_native_save_plan(record)
+        result = bpy.ops.theme_studio.native_theme_collision("INVOKE_DEFAULT", plan_token=token)
+        if "CANCELLED" in result:
+            _native_save_plans.pop(token, None)
+        return {"FINISHED"}
+    if finish_request is not None:
+        _validate_finish_save_request(context, finish_request)
+    paths, closed = _commit_native_theme(context, name, library_path, record["expected"])
+    _record_native_save_result(name, paths, closed)
+    if closed and resume_native_path:
+        _apply_native_theme_preset(context, resume_native_path)
+    return {"FINISHED"}
+
+
+class THEME_STUDIO_OT_save_native_theme(bpy.types.Operator):
+    bl_translation_context = CONTEXT
+    bl_idname = "theme_studio.save_native_theme"
+    bl_label = "Save Blender Theme…"
+    bl_description = "Save a native Blender theme preset and finish editing"
+    name: StringProperty(name="Theme Name", translation_context=CONTEXT, default="", maxlen=80)
+    library_path: StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+    resume_native_path: StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+
+    @classmethod
+    def poll(cls, _context):
+        session = get_session()
+        return session is not None and not session.faulted
+
+    def invoke(self, context, _event):
+        if not self.name:
+            self.name = context.window_manager.theme_studio_ui.profile_name
+        if not self.library_path:
+            preferences = _addon_preferences(context)
+            self.library_path = getattr(preferences, "native_library_path", "")
+        return context.window_manager.invoke_props_dialog(self, width=560, confirm_text=iface("Save Blender Theme"))
+
+    def draw(self, context):
+        self.layout.prop(self, "name")
+        library_name = next((name for name, path in native_themes.configured_libraries(context)
+                             if path == self.library_path), iface("not selected"))
+        self.layout.label(text=iface("Selected asset library: {name}").format(name=library_name))
+        _wrapped(self.layout, "Saving writes a native XML theme preset and ends this editing session only after both files are saved.")
+
+    def execute(self, context):
+        try:
+            result = _begin_native_theme_save(context, self.name, self.library_path, self.resume_native_path)
+            context.window_manager.theme_studio_ui.profile_name = self.name
+            return result
+        except Exception as exc:
+            _error(exc)
+            self.report({"ERROR"}, _message_text(_message))
+            return {"CANCELLED"}
+
+
+class THEME_STUDIO_OT_native_theme_collision(bpy.types.Operator):
+    bl_translation_context = CONTEXT
+    bl_idname = "theme_studio.native_theme_collision"
+    bl_label = "Existing Theme Files"
+    plan_token: StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+    resolution: EnumProperty(items=_native_collision_choice_items, options={"SKIP_SAVE"},
+                              translation_context=CONTEXT)
+    new_name: StringProperty(name="New Name", translation_context=CONTEXT, default="", maxlen=80)
+
+    def invoke(self, context, _event):
+        self.resolution = "CANCEL"
+        return context.window_manager.invoke_props_dialog(self, width=620)
+
+    def draw(self, _context):
+        plan = _native_save_plans.get(self.plan_token)
+        if plan is None:
+            self.layout.label(text=iface("Save request expired. Start again."), icon="ERROR")
+            return
+        self.layout.label(text=iface("Existing paths need a decision:"), icon="ERROR")
+        for path in plan["paths"]:
+            _wrapped(self.layout, str(path))
+        self.layout.prop(self, "resolution", expand=True)
+        if self.resolution == "RENAME" and plan["kind"] == "save":
+            self.layout.prop(self, "new_name")
+        elif self.resolution == "RENAME":
+            _wrapped(self.layout, "Choose a different destination in the file browser.")
+
+    def cancel(self, _context):
+        _native_save_plans.pop(self.plan_token, None)
+
+    def execute(self, context):
+        plan = _native_save_plans.get(self.plan_token)
+        if plan is None:
+            self.report({"ERROR"}, iface("Save request expired. Start again."))
+            return {"CANCELLED"}
+        if plan["session"] is not get_session():
+            _native_save_plans.pop(self.plan_token, None)
+            self.report({"ERROR"}, iface("Save request expired. Start again."))
+            return {"CANCELLED"}
+        if self.resolution == "CANCEL":
+            _native_save_plans.pop(self.plan_token, None)
+            return {"CANCELLED"}
+        if self.resolution == "RENAME":
+            record = _native_save_plans.get(self.plan_token)
+            if record["kind"] == "save" and not self.new_name.strip():
+                self.report({"WARNING"}, iface("Enter a new name."))
+                return {"CANCELLED"}
+            if record["kind"] == "save":
+                try:
+                    request = record.get("finish_request")
+                    if request is not None:
+                        request = _validate_finish_save_request(context, request)
+                        if request["save_mode"] == "UPDATE":
+                            raise RuntimeError(iface(
+                                "Update keeps the original name. Choose Overwrite or Cancel; choose Save as new to rename."))
+                        if request["save_mode"] == "NEW" and (
+                                _finish_native_stem(self.new_name).casefold() ==
+                                _finish_native_stem(request["source_origin"]["name"]).casefold()
+                                if request["source_origin"] and request["source_origin"].get("name")
+                                else False):
+                            raise RuntimeError(iface("Choose a different name to save as new."))
+                        request = dict(request, name=self.new_name,
+                                       normalized_name=_finish_native_stem(self.new_name))
+                    _native_save_plans.pop(self.plan_token, None)
+                    _begin_native_theme_save(context, self.new_name, record["library_path"],
+                                             record["resume_native_path"], finish_request=request)
+                except Exception as exc:
+                    _error(exc)
+                    self.report({"ERROR"}, _message_text(_message))
+                    return {"CANCELLED"}
+            else:
+                _native_save_plans.pop(self.plan_token, None)
+                bpy.ops.theme_studio.export_native_xml("INVOKE_DEFAULT")
+            return {"FINISHED"}
+        try:
+            if plan["kind"] == "save":
+                request = plan.get("finish_request")
+                if request is not None:
+                    request = _validate_finish_save_request(context, request)
+                    refreshed = native_themes.plan_native_theme(context, plan["name"], plan["library_path"])
+                    if (tuple(map(str, refreshed["paths"])) != tuple(map(str, plan["paths"]))
+                            or refreshed["expected"] != plan["expected"]):
+                        raise RuntimeError(iface("Theme files changed after confirmation. Start saving again."))
+                paths, closed = _commit_native_theme(context, plan["name"], plan["library_path"],
+                                                      plan["expected"])
+                _record_native_save_result(plan["name"], paths, closed)
+                if closed and plan["resume_native_path"]:
+                    _apply_native_theme_preset(context, plan["resume_native_path"])
+            else:
+                _export_native_xml(context, plan["filepath"], plan["expected"])
+            return {"FINISHED"}
+        except Exception as exc:
+            _error(exc)
+            self.report({"ERROR"}, _message_text(_message))
+            return {"CANCELLED"}
+        finally:
+            _native_save_plans.pop(self.plan_token, None)
+
+
+class THEME_STUDIO_OT_export_native_xml(bpy.types.Operator, ExportHelper):
+    bl_translation_context = CONTEXT
+    bl_idname = "theme_studio.export_native_xml"
+    bl_label = "Export Blender Theme Copy…"
+    bl_description = "Export a Blender theme copy without ending editing"
+    filename_ext = ".xml"
+    filter_glob: StringProperty(default="*.xml", options={"HIDDEN"})
+
+    @classmethod
+    def poll(cls, _context):
+        session = get_session()
+        return session is not None and not session.faulted
+
+    def invoke(self, context, _event):
+        if not self.filepath:
+            self.filepath = "theme.xml"
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        try:
+            _prepare_native_save(context)
+            path = native_themes._canonical(Path(bpy.path.ensure_ext(self.filepath, self.filename_ext)))
+            expected = {path: path.read_bytes() if path.exists() else None}
+            if expected[path] is not None:
+                token = _cache_native_save_plan({"kind": "export", "filepath": str(path),
+                                                 "paths": (path,), "expected": expected,
+                                                 "protected": False})
+                result = bpy.ops.theme_studio.native_theme_collision("INVOKE_DEFAULT", plan_token=token)
+                if "CANCELLED" in result:
+                    _native_save_plans.pop(token, None)
+                return {"FINISHED"}
+            _export_native_xml(context, str(path), expected)
+            _notice("Native XML copy exported. Editing session remains open.")
+            return {"FINISHED"}
+        except Exception as exc:
+            _error(exc)
+            self.report({"ERROR"}, _message_text(_message))
+            return {"CANCELLED"}
+
+
+class THEME_STUDIO_OT_load_native_theme(bpy.types.Operator):
+    bl_translation_context = CONTEXT
+    bl_idname = "theme_studio.load_native_theme"
+    bl_label = "Load Blender Theme…"
+    bl_description = "Load an existing Blender native theme preset"
+    filepath: StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+    preset_options: StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+    preset_choice: EnumProperty(items=_native_preset_choice_items, options={"SKIP_SAVE"},
+                                translation_context=CONTEXT)
+
+    @classmethod
+    def poll(cls, _context):
+        return _registry is not None and not _recovery_path and not (get_session() and get_session().faulted)
+
+    def invoke(self, context, _event):
+        if self.filepath:
+            return self.execute(context)
+        self.preset_options = json.dumps(native_themes.native_theme_presets())
+        if not json.loads(self.preset_options):
+            self.report({"WARNING"}, iface("No Blender theme presets were found."))
+            return {"CANCELLED"}
+        self.preset_choice = "NONE"
+        return context.window_manager.invoke_props_dialog(self, width=620)
+
+    def draw(self, _context):
+        self.layout.prop(self, "preset_choice", text=iface("Blender Theme"))
+
+    def execute(self, context):
+        try:
+            if self.filepath:
+                _load_selected_native_theme(context, self.filepath)
+                return {"FINISHED"}
+            if self.preset_choice == "NONE":
+                raise ValueError(iface("Choose an existing Blender theme."))
+            options = json.loads(self.preset_options)
+            index = int(self.preset_choice) - 1
+            if not 0 <= index < len(options):
+                raise ValueError(iface("Theme preset selection expired. Choose again."))
+            _label, filepath, _user_owned = options[index]
+            _load_selected_native_theme(context, filepath)
+            return {"FINISHED"}
+        except Exception as exc:
+            _error(exc)
+            self.report({"ERROR"}, _message_text(_message))
+            return {"CANCELLED"}
+
+
+class THEME_STUDIO_OT_resolve_native_load(bpy.types.Operator):
+    bl_translation_context = CONTEXT
+    bl_idname = "theme_studio.resolve_native_load"
+    bl_label = "Resolve Editing Before Loading"
+    filepath: StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+    resolution: EnumProperty(name="Current Editing", translation_context=CONTEXT, items=(
+        ("SAVE", "Save Current", "Save a named native preset, then load selected preset"),
+        ("DISCARD", "Discard Current", "Restore initial theme, then load selected preset"),
+        ("CANCEL", "Cancel", "Keep current editing and do not load"),
+    ), default="CANCEL", options={"SKIP_SAVE"})
+
+    def invoke(self, context, _event):
+        self.resolution = "CANCEL"
+        return context.window_manager.invoke_props_dialog(self, width=560)
+
+    def draw(self, _context):
+        self.layout.label(text=iface("Resolve the current session before loading this Blender theme."))
+        self.layout.prop(self, "resolution", expand=True)
+
+    def execute(self, context):
+        try:
+            discovered = {str(Path(path).resolve()) for _label, path, _user_owned
+                          in native_themes.native_theme_presets()}
+            if str(Path(self.filepath).resolve()) not in discovered:
+                raise RuntimeError(iface("Choose an existing Blender theme."))
+            native_themes.validate_native_preset(self.filepath)
+            if self.resolution == "CANCEL":
+                return {"CANCELLED"}
+            if self.resolution == "SAVE":
+                bpy.ops.theme_studio.save_native_theme("INVOKE_DEFAULT", resume_native_path=self.filepath)
+                return {"FINISHED"}
+            _close_session("cancel")
+            _apply_native_theme_preset(context, self.filepath)
+            return {"FINISHED"}
+        except Exception as exc:
+            _error(exc)
+            self.report({"ERROR"}, _message_text(_message))
+            return {"CANCELLED"}
+
+
 class THEME_STUDIO_OT_palette_details(bpy.types.Operator):
     bl_translation_context = "Theme Studio"
     bl_idname = "theme_studio.palette_details"
@@ -2075,22 +3080,344 @@ class THEME_STUDIO_OT_palette_details(bpy.types.Operator):
     def execute(self, context):
         state = context.window_manager.theme_studio_ui
         if self.all_controls:
+            state.picker_active = False
+            state.picker_kind = state.picker_editor_id = state.picker_label = ""
             state.palette_focus = ""
             if _detail_items:
                 state.detail_category = _detail_items[0][0]
         else:
-            if self.group_id == "viewport" and _viewport_group is not None:
-                state.palette_focus = "viewport"
-            elif not any(group["id"] == self.group_id for group in _palette_map):
+            if self.group_id == "viewport":
+                if _viewport_group is None:
+                    self.report({"ERROR"}, iface("Palette group is unavailable."))
+                    return {"CANCELLED"}
+                focus = "viewport"
+            elif any(group["id"] == self.group_id for group in _palette_map):
+                focus = self.group_id
+            else:
                 self.report({"ERROR"}, iface("Palette group is unavailable."))
                 return {"CANCELLED"}
-            else:
-                state.palette_focus = self.group_id
+            state.picker_active = False
+            state.picker_kind = state.picker_editor_id = state.picker_label = ""
+            state.palette_focus = focus
         state.show_details = True
         state.workspace_page = "details"
         _detail_changed(state, context)
         _redraw()
+        mode = _workspace_mode(context)
+        if mode == "NPANEL":
+            if not _show_theme_npanel(context):
+                self.report({"WARNING"}, iface("Theme details are ready. Open a 3D View to see them in the sidebar."))
+        elif context.area is None or context.area.type != "PREFERENCES":
+            bpy.ops.theme_studio.open()
         return {"FINISHED"}
+
+
+class THEME_STUDIO_OT_clear_picker(bpy.types.Operator):
+    bl_translation_context = CONTEXT
+    bl_idname = "theme_studio.clear_picker"
+    bl_label = "Back to all Details"
+
+    def execute(self, context):
+        state = context.window_manager.theme_studio_ui
+        state.picker_active = False
+        state.picker_kind = state.picker_editor_id = state.picker_label = ""
+        state.palette_focus = ""
+        if _detail_items:
+            state.detail_category = _detail_items[0][0]
+        _detail_changed(state, context)
+        _redraw()
+        return {"FINISHED"}
+
+
+def _draw_workspace(layout, context):
+    layout.use_property_split = False
+    state = context.window_manager.theme_studio_ui
+    session = get_session()
+    heading = layout.row(align=True)
+    heading.label(text=iface("Customize Theme"), icon="COLOR", text_ctxt=CONTEXT)
+    heading.menu("THEME_STUDIO_MT_session", text="", icon="DOWNARROW_HLT")
+    if _recovery_path:
+        _draw_recovery(layout)
+        return
+    _draw_theme_selector(layout, context, session)
+    _draw_identity_status(layout, context, state, session)
+    if _severity != "INFO":
+        _draw_status(layout, state)
+    if session is None:
+        if _save_pending:
+            _wrapped(layout, "Theme remains active, but preference saving was not verified.")
+            layout.operator_context = "INVOKE_DEFAULT"
+            layout.operator("theme_studio.save_preferences", icon="FILE_TICK")
+        _wrapped(layout, "Start with current colors. Live changes remain reversible and unsaved.")
+        start = layout.row()
+        start.scale_y = 1.3
+        start.operator("theme_studio.start", text=iface("Retry") if _start_failed else iface("Start editing"), icon="DUPLICATE")
+        layout.operator_context = "INVOKE_DEFAULT"
+        secondary = layout.row(align=True)
+        secondary.scale_y = 0.85
+        secondary.operator("theme_studio.load_profile", text=iface("Load Theme Studio Project…"), icon="FILE_FOLDER")
+        if _workspace_mode(context) != "NPANEL":
+            secondary.operator("theme_studio.open", text=iface("Open Preferences"), icon="PREFERENCES")
+        if _severity == "INFO":
+            _draw_status(layout, state)
+        if _file_notice:
+            _wrapped(layout, _file_notice)
+        return
+    if session.faulted:
+        _wrapped(layout, "Restore incomplete. Editing is blocked. Save a copy or retry restoration; recovery details are under Files and Recovery." if
+                 _workspace_mode(context) != "NPANEL" else
+                 "Restore incomplete. Editing is blocked. Retry restoration here; recovery details are under Files and Recovery.")
+        layout.operator("theme_studio.cancel", text=iface("Retry Restore"), icon="CANCEL")
+        return
+    warning = layout.box()
+    _wrapped(warning, "Preview is live, not saved. Do not use Blender's Save Preferences during preview.")
+    _wrapped(warning, "Closing Preferences does not end preview. Use Finish here." if
+             _workspace_mode(context) != "NPANEL" else
+             "Hiding this panel does not end preview. Use Finish here.")
+    if _workspace_mode(context) != "NPANEL":
+        warning.operator("theme_studio.open", text=iface("Open Preferences"), icon="PREFERENCES")
+    if session._auto_save_owned and session.backend.get_auto_save():
+        warning.alert = True
+        _wrapped(warning, "Save on Exit changed during preview. Further edits are blocked.")
+    navigation = layout.row(align=True)
+    navigation.prop(state, "workspace_page", expand=True)
+    secondary = layout.row(align=True)
+    secondary.scale_y = 0.8
+    secondary.operator_context = "INVOKE_DEFAULT"
+    if _comparing:
+        secondary.operator("theme_studio.previous", text=iface("Return to Live Theme"), icon="HIDE_OFF")
+    else:
+        compare = secondary.row(align=True)
+        compare.enabled = _theme_changed_or_pending(session)
+        compare.operator("theme_studio.previous", text=iface("Compare"), icon="ARROW_LEFTRIGHT")
+    secondary.operator("theme_studio.finish", text=iface("Finish…"), icon="CHECKMARK")
+    history = layout.row(align=True)
+    history.scale_y = 0.8
+    history.operator_context = "INVOKE_DEFAULT"
+    history.label(text=iface("Edit"), text_ctxt=CONTEXT)
+    history.operator("theme_studio.undo", text="", icon="LOOP_BACK")
+    history.operator("theme_studio.redo", text="", icon="LOOP_FORWARDS")
+    draft_rna = context.window_manager.theme_studio_draft
+    if state.workspace_page == "theme":
+        _draw_palette(layout, state, session)
+        _draw_contrast(layout, state, session)
+    elif state.workspace_page == "viewport":
+        _draw_viewport(layout, state, session, draft_rna)
+    else:
+        _draw_details(layout, state, session, draft_rna)
+    if _severity == "INFO":
+        _draw_status(layout, state)
+
+
+def _draw_preferences_entry(self, context):
+    if _workspace_mode(context) != "NPANEL":
+        _draw_workspace(self.layout, context)
+
+
+def _draw_project_access(self, _context):
+    self.layout.operator("theme_studio.open", text=iface("Theme Studio"), icon="PREFERENCES")
+
+
+def _area_region_at(screen, mouse_x, mouse_y):
+    for area in screen.areas:
+        if not (area.x <= mouse_x < area.x + area.width and area.y <= mouse_y < area.y + area.height):
+            continue
+        regions = sorted(area.regions, key=lambda region: (
+            region.type not in {"UI", "TOOLS", "HEADER", "TOOL_HEADER", "TOOL_PROPS"},
+            region.width <= 0 or region.height <= 0,
+        ))
+        for region in regions:
+            if region.width > 0 and region.height > 0 and (
+                    region.x <= mouse_x < region.x + region.width
+                    and region.y <= mouse_y < region.y + region.height):
+                return area, region
+    return None
+
+
+def _picker_target_at(screen, mouse_x, mouse_y):
+    hit = _area_region_at(screen, mouse_x, mouse_y)
+    if hit is None:
+        return None
+    area, region = hit
+    return resolve_target(area.type, region.type)
+
+
+def _open_picker_preferences(generation, window):
+    if generation != _picker_generation or _registry is None:
+        return None
+    try:
+        if window.as_pointer() not in {item.as_pointer() for item in bpy.context.window_manager.windows}:
+            return None
+    except (AttributeError, ReferenceError, RuntimeError):
+        return None
+    try:
+        with bpy.context.temp_override(window=window):
+            result = bpy.ops.theme_studio.open()
+        if "CANCELLED" in result:
+            raise RuntimeError("Preferences could not be opened")
+    except Exception:
+        _notice("Location is saved, but Blender Preferences could not be opened.", "WARNING")
+    return None
+
+
+def _route_pick_target(context, target):
+    state = context.window_manager.theme_studio_ui
+    if target is None or not _set_picker_target(state, get_registry(), target):
+        return False
+    _detail_changed(state, context)
+    _redraw()
+    return True
+
+
+class THEME_STUDIO_OT_pick(bpy.types.Operator):
+    bl_translation_context = CONTEXT
+    bl_idname = "theme_studio.pick"
+    bl_label = "Locate in Theme Studio"
+    bl_description = "Choose an editor or shared controls in this project window"
+
+    @classmethod
+    def poll(cls, context):
+        return (_registry is not None and not _recovery_path and context.window is not None
+                and context.window.screen is not None and context.area is not None
+                and context.area.type != "PREFERENCES")
+
+    def invoke(self, context, _event):
+        global _picker_generation
+        _picker_generation += 1
+        self._picker_window = context.window.as_pointer()
+        self._picker_window_ref = context.window
+        self._picker_screen = context.window.screen
+        self._picker_generation = _picker_generation
+        self._picker_target = None
+        self._picker_pressed = False
+        self._picker_cancel_right = False
+        context.window.cursor_modal_set("EYEDROPPER")
+        try:
+            context.window_manager.modal_handler_add(self)
+        except Exception:
+            try:
+                context.window.cursor_modal_restore()
+            except (AttributeError, ReferenceError, RuntimeError):
+                pass
+            raise
+        self.report({"INFO"}, iface("Picker active: click an editor or control. Esc or right-click cancels."))
+        return {"RUNNING_MODAL"}
+
+    def _end_picker(self, result, message=None, level="INFO"):
+        try:
+            self._picker_window_ref.cursor_modal_restore()
+        except (AttributeError, ReferenceError, RuntimeError):
+            pass
+        if message:
+            self.report({level}, iface(message))
+        return {result}
+
+    def modal(self, context, event):
+        if self._picker_generation != _picker_generation:
+            return self._end_picker("CANCELLED", "Location cancelled.")
+        if not context.window or context.window.as_pointer() != self._picker_window:
+            return self._end_picker("CANCELLED", "Location cancelled.")
+        if event.type == "ESC" and event.value == "PRESS":
+            return self._end_picker("CANCELLED", "Location cancelled.")
+        if event.type == "RIGHTMOUSE":
+            if event.value == "PRESS":
+                self._picker_cancel_right = True
+            elif event.value == "RELEASE" and self._picker_cancel_right:
+                return self._end_picker("CANCELLED", "Location cancelled.")
+            return {"RUNNING_MODAL"}
+        if event.type == "MOUSEMOVE":
+            return {"RUNNING_MODAL", "PASS_THROUGH"}
+        if event.type == "LEFTMOUSE" and event.value == "PRESS":
+            try:
+                self._picker_target = _picker_target_at(self._picker_screen, event.mouse_x, event.mouse_y)
+            except Exception:
+                return self._end_picker("CANCELLED", "Could not inspect this location.", "WARNING")
+            self._picker_pressed = True
+            return {"RUNNING_MODAL"}
+        if event.type == "LEFTMOUSE" and event.value == "RELEASE":
+            if not self._picker_pressed:
+                return {"RUNNING_MODAL"}
+            self._picker_pressed = False
+            if self._picker_target is None:
+                return self._end_picker("CANCELLED", "No Theme Studio destination matches this location.", "WARNING")
+            try:
+                routed = _route_pick_target(context, self._picker_target)
+            except Exception:
+                return self._end_picker("CANCELLED", "Could not locate this destination.", "WARNING")
+            if not routed:
+                return self._end_picker("CANCELLED", "No editable Theme Studio fields match this location.", "WARNING")
+            generation, window = self._picker_generation, self._picker_window_ref
+            label = self._picker_target["label"]
+            message = ("Shared control styles selected. Exact widget is not identified."
+                       if self._picker_target["kind"] == "controls" else
+                       "Outliner theme fields selected. Clicked row is not identified."
+                       if self._picker_target["editor_id"] == "outliner" else
+                       iface("{label} theme fields selected.").format(label=iface(label)))
+            result = self._end_picker("FINISHED", message)
+            try:
+                bpy.app.timers.register(lambda: _open_picker_preferences(generation, window), first_interval=0.1)
+            except (AttributeError, ReferenceError, RuntimeError):
+                self.report({"WARNING"}, iface("Location is saved, but Blender Preferences could not be opened."))
+            return result
+        return {"RUNNING_MODAL"}
+
+
+class THEME_STUDIO_OT_locate(bpy.types.Operator):
+    bl_translation_context = CONTEXT
+    bl_idname = "theme_studio.locate"
+    bl_label = "Locate in Theme Studio"
+    bl_description = "Open matching editor fields or shared control styles in Theme Studio"
+    button_context: BoolProperty(options={"SKIP_SAVE"})
+
+    @classmethod
+    def poll(cls, _context):
+        return _registry is not None and not _recovery_path
+
+    def execute(self, context):
+        area, region = context.area, context.region
+        target = (resolve_target(area.type, region.type, button=self.button_context)
+                  if area is not None and region is not None else None)
+        if target is None:
+            self.report({"WARNING"}, iface("No Theme Studio destination matches this location."))
+            return {"CANCELLED"}
+        if not _route_pick_target(context, target):
+            self.report({"WARNING"}, iface("No editable Theme Studio fields match this location."))
+            return {"CANCELLED"}
+        if "CANCELLED" in bpy.ops.theme_studio.open():
+            self.report({"ERROR"}, iface("Location is saved, but Blender Preferences could not be opened."))
+        return {"FINISHED"}
+
+
+class THEME_STUDIO_OT_open(bpy.types.Operator):
+    bl_translation_context = CONTEXT
+    bl_idname = "theme_studio.open"
+    bl_label = "Open Theme Studio"
+    bl_description = "Open Theme Studio in the selected workspace mode"
+
+    def execute(self, context):
+        if _workspace_mode(context) == "NPANEL":
+            if _show_theme_npanel(context):
+                self.report({"INFO"}, iface("Theme Studio is in the 3D View sidebar. Select the Theme Studio tab."))
+                return {"FINISHED"}
+            self.report({"WARNING"}, iface("Open a 3D View to use Theme Studio in its sidebar."))
+            return {"CANCELLED"}
+        try:
+            result = bpy.ops.screen.userpref_show()
+            if "CANCELLED" in result:
+                raise RuntimeError(iface("Blender Preferences could not be opened."))
+            preferences_window = next((window for window in context.window_manager.windows
+                                       if window.screen and any(area.type == "PREFERENCES"
+                                                                for area in window.screen.areas)), None)
+            if preferences_window is None:
+                raise RuntimeError(iface("Blender Preferences window is unavailable."))
+            context.preferences.active_section = "THEMES"
+            for area in preferences_window.screen.areas:
+                if area.type == "PREFERENCES":
+                    area.tag_redraw()
+            return {"FINISHED"}
+        except Exception as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
 
 
 class THEME_STUDIO_PT_theme(bpy.types.Panel):
@@ -2100,95 +3427,103 @@ class THEME_STUDIO_PT_theme(bpy.types.Panel):
     bl_region_type = "UI"
     bl_category = "Theme Studio"
 
+    @classmethod
+    def poll(cls, context):
+        return _workspace_mode(context) != "PREFERENCES"
+
     def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = False
-        state = context.window_manager.theme_studio_ui
-        session = get_session()
-        heading = layout.row(align=True)
-        heading.label(text=iface("Customize Theme"), icon="COLOR", text_ctxt=CONTEXT)
-        heading.menu("THEME_STUDIO_MT_session", text="", icon="DOWNARROW_HLT")
-        if _recovery_path:
-            _draw_recovery(layout)
-            return
-        if session is None:
-            layout.label(text=session_status(), icon="INFO", text_ctxt=CONTEXT, translate=False)
-        if _severity != "INFO":
-            _draw_status(layout, state)
-        if session is None:
-            if _save_pending:
-                _wrapped(layout, "Theme remains active, but preference saving was not verified.")
-                layout.operator_context = "INVOKE_DEFAULT"
-                layout.operator("theme_studio.save_preferences", icon="FILE_TICK")
-            _wrapped(layout, "Start with current colors. Live changes remain reversible and unsaved.")
-            start = layout.row()
-            start.scale_y = 1.3
-            start.operator("theme_studio.start", text=iface("Retry") if _start_failed else iface("Start editing"), icon="DUPLICATE")
-            layout.operator_context = "INVOKE_DEFAULT"
-            secondary = layout.row()
-            secondary.scale_y = 0.85
-            secondary.operator("theme_studio.load_profile", text=iface("Open Saved Theme…"), icon="FILE_FOLDER")
-            if _severity == "INFO":
-                _draw_status(layout, state)
-            if _file_notice:
-                _wrapped(layout, _file_notice)
-            return
+        _draw_npanel_shortcut(self.layout, context)
 
-        if session.faulted:
-            layout.label(text=session_status(), icon="ERROR")
-            _wrapped(layout, "Restore incomplete. Editing is blocked. Save a copy or retry restoration; recovery details are under Files and Recovery.")
-            layout.operator("theme_studio.cancel", text=iface("Retry Restore"), icon="CANCEL")
-            return
 
-        navigation = layout.row(align=True)
-        navigation.prop(state, "workspace_page", expand=True)
-        secondary = layout.row(align=True)
-        secondary.scale_y = 0.8
-        secondary.operator_context = "INVOKE_DEFAULT"
-        if _comparing:
-            secondary.operator("theme_studio.previous", text=iface("Return to Live Theme"), icon="HIDE_OFF")
-        else:
-            compare = secondary.row(align=True)
-            compare.enabled = _theme_changed_or_pending(session)
-            compare.operator("theme_studio.previous", text=iface("Compare"), icon="ARROW_LEFTRIGHT")
-        secondary.operator("theme_studio.finish", text=iface("Finish…"), icon="CHECKMARK")
-        secondary.operator("theme_studio.cancel", text=iface("Discard"), icon="CANCEL")
-        history = layout.row(align=True)
-        history.scale_y = 0.8
-        history.operator_context = "INVOKE_DEFAULT"
-        history.label(text=iface("Edit"), text_ctxt=CONTEXT)
-        history.operator("theme_studio.undo", text="", icon="LOOP_BACK")
-        history.operator("theme_studio.redo", text="", icon="LOOP_FORWARDS")
-        layout.label(text=session_status(), icon="INFO", text_ctxt=CONTEXT)
-        draft_rna = context.window_manager.theme_studio_draft
-        if state.workspace_page == "theme":
-            _draw_palette(layout, state, session)
-            _draw_contrast(layout, state, session)
-        elif state.workspace_page == "viewport":
-            _draw_viewport(layout, state, session, draft_rna)
-        else:
-            _draw_details(layout, state, session, draft_rna)
-        if _severity == "INFO":
-            _draw_status(layout, state)
+def _draw_npanel_shortcut(layout, context):
+    mode = _workspace_mode(context)
+    if mode == "NPANEL":
+        _draw_workspace(layout, context)
+        return
+    layout.use_property_split = False
+    heading = layout.row(align=True)
+    heading.label(text=iface("Theme Studio · Hybrid"), icon="COLOR", text_ctxt=CONTEXT)
+    heading.operator("theme_studio.open", text=iface("Full Workspace"), icon="PREFERENCES")
+    if _recovery_path:
+        _draw_recovery(layout)
+        return
+    session = get_session()
+    _draw_theme_selector(layout, context, session)
+    layout.label(text=session_status(), icon="INFO" if session else "PAUSE", text_ctxt=CONTEXT)
+    if session is None:
+        layout.operator("theme_studio.start", text=iface("Start editing"), icon="DUPLICATE")
+        return
+    if session.faulted:
+        _wrapped(layout, "Restore incomplete. Editing is blocked. Retry restoration in Theme Studio Preferences." if
+                 _workspace_mode(context) != "NPANEL" else
+                 "Restore incomplete. Editing is blocked. Retry restoration here.")
+        layout.operator("theme_studio.cancel", text=iface("Retry Restore"), icon="CANCEL")
+        return
+    _wrapped(layout, "Preview is live, not saved. Do not use Blender's Save Preferences during preview.")
+    actions = layout.row(align=True)
+    actions.operator("theme_studio.finish", text=iface("Finish…"), icon="CHECKMARK")
+    _draw_palette(layout, context.window_manager.theme_studio_ui, session)
+
+
+def _show_theme_npanel(context):
+    window = getattr(context, "window", None)
+    screen = getattr(window, "screen", None)
+    if screen is None:
+        return False
+    area = context.area if context.area and context.area.type == "VIEW_3D" else next(
+        (item for item in screen.areas if item.type == "VIEW_3D"), None)
+    if area is None:
+        return False
+    area.spaces.active.show_region_ui = True
+    area.tag_redraw()
+    return True
+
+
+def _install_ui_hooks():
+    global _ui_hooks_registered
+    required = (("USERPREF_PT_theme", "prepend", _draw_preferences_entry),
+                ("TOPBAR_MT_editor_menus", "append", _draw_project_access))
+    for name, method, callback in required:
+        menu = getattr(bpy.types, name, None)
+        if menu is None:
+            raise RuntimeError(iface("Required Blender menu is unavailable: {name}").format(name=name))
+        getattr(menu, method)(callback)
+        _ui_hooks.append((menu, callback))
+        _ui_hooks_registered = True
+
+
+def _remove_ui_hooks():
+    global _ui_hooks_registered
+    while _ui_hooks:
+        menu, callback = _ui_hooks[-1]
+        menu.remove(callback)
+        _ui_hooks.pop()
+    _ui_hooks_registered = False
+
 
 
 _CLASSES = (
-    THEME_STUDIO_PG_target, THEME_STUDIO_PG_state, THEME_STUDIO_OT_start, THEME_STUDIO_OT_preview,
+    THEME_STUDIO_AP_preferences, THEME_STUDIO_PG_target, THEME_STUDIO_PG_state,
+    THEME_STUDIO_OT_start, THEME_STUDIO_OT_preview,
     THEME_STUDIO_OT_previous, THEME_STUDIO_OT_cancel, THEME_STUDIO_OT_confirm,
     THEME_STUDIO_OT_finish, THEME_STUDIO_OT_save_preferences, THEME_STUDIO_OT_undo, THEME_STUDIO_OT_redo,
     THEME_STUDIO_OT_common_value, THEME_STUDIO_OT_palette_details,
+    THEME_STUDIO_OT_select_native_library, THEME_STUDIO_OT_save_native_theme,
+    THEME_STUDIO_OT_native_theme_collision, THEME_STUDIO_OT_export_native_xml,
+    THEME_STUDIO_OT_load_native_theme, THEME_STUDIO_OT_resolve_native_load,
     THEME_STUDIO_OT_reopen_initial, THEME_STUDIO_OT_recovery_choice,
     THEME_STUDIO_OT_retry_recovery_discovery, THEME_STUDIO_OT_archive_recovery, THEME_STUDIO_OT_recovery,
     THEME_STUDIO_OT_protect_field, THEME_STUDIO_OT_reset_field,
     THEME_STUDIO_OT_copy_report, THEME_STUDIO_OT_page,
     THEME_STUDIO_OT_save_profile, THEME_STUDIO_OT_load_profile, THEME_STUDIO_OT_safety,
-    THEME_STUDIO_MT_session, THEME_STUDIO_UL_fields, THEME_STUDIO_PT_theme,
+    THEME_STUDIO_MT_session, THEME_STUDIO_MT_theme_selector, THEME_STUDIO_UL_fields,
+    THEME_STUDIO_OT_open, THEME_STUDIO_PT_theme,
 )
 
 
 def register(*, storage_dir=None):
     """storage_dir is an explicit override for isolated probes."""
-    global _registry, _storage_override, _attributes, _color_attributes, _alpha_attributes, _palette_map, _viewport_group, _detail_map, _palette_keys, _palette_alpha_keys, _roundness_paths, _detail_items, _detail_context_items, _detail_context_labels, _recovery_path, _recovery_document, _recovery_plan, _recovery_error, _recovery_detail, _recovery_progress, _recovery_blocked, _recovery_records, _recovery_filenames
+    global _registry, _storage_override, _attributes, _color_attributes, _alpha_attributes, _palette_map, _viewport_group, _detail_map, _palette_keys, _palette_alpha_keys, _roundness_paths, _detail_items, _detail_context_items, _detail_context_labels, _recovery_path, _recovery_document, _recovery_plan, _recovery_error, _recovery_detail, _recovery_progress, _recovery_blocked, _recovery_records, _recovery_filenames, _ui_hooks_registered, _theme_source_origin
     if _registered_classes:
         raise RuntimeError(iface("Theme Studio UI is already registered."))
     if get_session() is not None:
@@ -2243,6 +3578,7 @@ def register(*, storage_dir=None):
         for cls in (draft_class, palette_class, *_CLASSES):
             bpy.utils.register_class(cls)
             _registered_classes.append(cls)
+        _install_ui_hooks()
         bpy.types.WindowManager.theme_studio_ui = PointerProperty(type=THEME_STUDIO_PG_state, options={"SKIP_SAVE"})
         bpy.types.WindowManager.theme_studio_draft = PointerProperty(type=draft_class, options={"SKIP_SAVE"})
         bpy.types.WindowManager.theme_studio_palette = PointerProperty(type=palette_class, options={"SKIP_SAVE"})
@@ -2255,7 +3591,10 @@ def register(*, storage_dir=None):
             _recovery_records, _recovery_filenames = (), ()
             _recovery_decisions.clear()
             _discover_recovery(directory)
+        _theme_source_origin = _capture_theme_origin(bpy.context)
     except Exception:
+        if _ui_hooks_registered:
+            _remove_ui_hooks()
         for name in ("theme_studio_palette", "theme_studio_draft", "theme_studio_ui"):
             if hasattr(bpy.types.WindowManager, name):
                 delattr(bpy.types.WindowManager, name)
@@ -2271,10 +3610,15 @@ def register(*, storage_dir=None):
 
 
 def unregister():
-    global _registry, _storage_override, _palette_map, _detail_map, _palette_keys, _detail_items, _detail_context_items, _detail_context_labels, _recovery_path, _recovery_document, _recovery_plan, _recovery_blocked, _recovery_records, _recovery_filenames, _recovery_error, _recovery_detail, _recovery_progress
+    global _registry, _storage_override, _palette_map, _detail_map, _palette_keys, _detail_items, _detail_context_items, _detail_context_labels, _recovery_path, _recovery_document, _recovery_plan, _recovery_blocked, _recovery_records, _recovery_filenames, _recovery_error, _recovery_detail, _recovery_progress, _ui_hooks_registered, _picker_generation, _session_theme_path, _theme_result
     # Failure deliberately leaves all registered UI and handlers intact.
+    _picker_generation += 1
     _cancel_for_lifecycle(iface("Add-on disabled"))
+    _clear_native_save_plans()
+    _native_theme_library_associations.clear()
     _discard_colors()
+    if _ui_hooks_registered:
+        _remove_ui_hooks()
     if _load_pre in bpy.app.handlers.load_pre:
         bpy.app.handlers.load_pre.remove(_load_pre)
     for name in ("theme_studio_palette", "theme_studio_draft", "theme_studio_ui"):
@@ -2283,11 +3627,13 @@ def unregister():
     for cls in reversed(_registered_classes):
         bpy.utils.unregister_class(cls)
     _registered_classes.clear()
+    _native_enum_item_refs.clear()
     _registry = None
     _storage_override = None
     _recovery_path, _recovery_document, _recovery_plan, _recovery_blocked = "", None, None, False
     _recovery_records, _recovery_filenames = (), ()
     _recovery_error, _recovery_detail, _recovery_progress = "", "", ""
+    _reset_theme_status()
     _recovery_decisions.clear()
     _palette_map = _detail_map = _detail_items = ()
     _palette_keys = {}

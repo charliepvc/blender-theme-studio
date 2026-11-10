@@ -19,7 +19,7 @@ class BlenderBackend:
         for path, spec in registry.fields.items():
             owner_path, identifier = path.rsplit(".", 1)
             try:
-                owner = bpy.context.path_resolve(owner_path)
+                owner = self._resolve(owner_path)
                 prop = owner.bl_rna.properties[identifier]
             except (ValueError, KeyError, AttributeError) as exc:
                 raise ValidationError(f"Catalog field unavailable: {path}") from exc
@@ -44,11 +44,16 @@ class BlenderBackend:
         # Different adapter instances must not permit concurrent theme sessions.
         return ("blender-preferences", self._bpy.context.preferences.as_pointer())
 
+    def _resolve(self, path):
+        if not path.startswith("preferences."):
+            raise ValidationError("Path is not in the verified theme catalog")
+        return self._bpy.context.preferences.path_resolve(path[len("preferences."):])
+
     def read(self, path):
         self._main_thread()
         if path not in self.registry.fields:
             raise ValidationError("Path is not in the verified theme catalog")
-        value = self._bpy.context.path_resolve(path)
+        value = self._resolve(path)
         if self.registry.fields[path].length:
             value = list(value)
         return self.registry.fields[path].validate(value)
@@ -57,7 +62,7 @@ class BlenderBackend:
         self._main_thread()
         value = self.registry.validate({path: value}, allow_metadata=True)[path]
         owner_path, identifier = path.rsplit(".", 1)
-        setattr(self._bpy.context.path_resolve(owner_path), identifier, value)
+        setattr(self._resolve(owner_path), identifier, value)
 
     def get_auto_save(self):
         self._main_thread()
