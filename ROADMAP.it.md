@@ -93,10 +93,10 @@ di installazione.
 
 ### 4. Pubblicare solo dopo accettazione e autorizzazione
 
-- [ ] Registrare candidato verificato, checksum, build supportate e limiti noti.
-- [ ] Eseguire commit/push del checkpoint privato finale, poi esaminare l’export
+- [x] Registrare candidato verificato, checksum, build supportate e limiti noti.
+- [x] Eseguire commit/push del checkpoint privato finale, poi esaminare l’export
   pubblico limitato ai file consentiti tramite il flusso di pubblicazione separato.
-- [ ] Pubblicare, creare tag e release solo con autorizzazione esplicita. Non
+- [x] Pubblicare, creare tag e release solo con autorizzazione esplicita. Non
   trasferire mai la cronologia privata nel repository pubblico.
 
 Il rapporto mancante della finestra manuale chiusa resta un limite storico delle

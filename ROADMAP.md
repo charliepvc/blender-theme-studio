@@ -82,10 +82,10 @@ Why third: catch missing files, lifecycle defects and installation regressions.
 
 ### 4. Publish only after acceptance and authorization
 
-- [ ] Record the verified candidate, checksum, supported builds and known limits.
-- [ ] Commit/push the final private checkpoint, then review the allow-listed public
+- [x] Record the verified candidate, checksum, supported builds and known limits.
+- [x] Commit/push the final private checkpoint, then review the allow-listed public
   export through the separate publishing workflow.
-- [ ] Publish/tag/release only with explicit authorization. Never push private
+- [x] Publish/tag/release only with explicit authorization. Never push private
   history to the public repository.
 
 The missing report from the closed manual window remains a historical evidence
